@@ -1,0 +1,238 @@
+[appendix]
+
+[[Appendix-revision_history]]
+== Revision History
+
+Revision 1.0                    Monday, August 24, 2015                 Dan Sneddon
+Modified deployment commands to use Heat templates
+Added information about creating provider networks
+Added tenant network creation
+Removed draft status
+Revision 0.3                    Thursday, July 22, 2015                 Dan Sneddon
+Added diagram and description depicting network reference architecture NIC cabling
+Revision 0.3                    Thursday, July 16, 2015                 Dan Sneddon
+Updated network isolation configuration instructions
+Cleanup and additional content in Neutron chapter
+Revision 0.2                    Wednesday, June 10, 2015                Dan Sneddon
+Significant changes to structure
+Updated architecture description to new model
+Added draft of installation/configuration chapter
+Revision 0.1                    Thursday, May 28, 2015          Dan Sneddon
+Transferred content not related to the installation from the RHEL OSP 5 Network Reference Architecture
+
+[appendix]
+[[Appendix-contributors]]
+== Contributors
+1. Jacob Liberman - content review, technical content review (RHEL-OSP)
+2. Laurent Domb - content review
+3. Steven Reichard - technical content review (RHEL-OSP)
+
+[appendix]
+[[Appendix-OpenStack_terminology]]
+== OpenStack Terminology
+
+OpenStack is a complicated project comprised of many modular services. Like OpenStack, the terminology used to describe OpenStack evolves over time. These sections define terminology used in the network architecture.
+
+=== Server Roles
+
+A typical OpenStack deployment consists of multiple servers performing various roles. Some roles are performed by dedicated servers. Other roles might overlap across the same servers. 
+
+[glossary]
+*Controller Node*::
+  The OpenStack controller nodes run the API services, schedulers, and auxiliary services such as the state database, object caching system, and messaging system. Each OpenStack service can be distributed across all or a subset of the controller nodes.
+
+*Compute Node*::
+  Compute nodes provide the processing, memory, and networking resources required to run instances. In RHEL OSP 5, the compute nodes run the KVM hypervisor. KVM manages virtual machine (VM) access to the underlying hardware. OpenStack compute nodes scale natively. New Compute nodes register themselves with the Nova scheduler. The scheduler load balances new instances across all registered Compute nodes in a round robin fashion. Each compute node runs as a single node cluster. Pacemaker controls monitoring and restarting the local Compute node in the event of a service interruption.
+
+*Storage Node*::
+  In this reference architecture, Storage Node refers to the server or servers that provide the underlying storage for the OpenStack storage services. Swift nodes provide object storage. Cinder nodes provide block storage. Ceph nodes provide an OpenStack-based back-end for object and block storage. Infrastructure SAN or NAS may also provide storage backing.
+
+=== OpenStack Service Terminology
+
+OpenStack is comprised of multiple services which work together to manage and operate the infrastructure.
+
+[glossary]
+*Identity Service (“Keystone”)*::
+ This is the centralized authentication and authorization mechanism for all OpenStack users and services. It supports multiple forms of authentication including standard username and password credentials, token-based systems and AWS-style logins that use public/private key pairs. It can also integrate with existing directory services such as LDAP or .
+
+*Image Service (“Glance”)*::
+ This service registers and delivers virtual machine images. They can be copied via snapshot and immediately stored as the basis for new instance deployments. Stored images allow OpenStack users and administrators to provision multiple servers quickly and consistently. The Image Service API provides a standard RESTful interface for querying information about the images.
+
+*Compute Service (“Nova”)*::
+  OpenStack Compute provisions and manages virtual machines. It is the backbone of OpenStack’s IaaS functionality. OpenStack Compute scales horizontally on standard hardware enabling the favorable economics of cloud computing.
+
+*Block Storage (“Cinder”)*::
+  While the OpenStack Compute service provisions ephemeral storage for deployed instances based on their hardware profiles, the OpenStack Block Storage service provides compute instances with persistent block storage. Block storage is appropriate for performance sensitive scenarios such as databases or frequently accessed file systems. Persistent block storage can survive instance termination. It can also be moved between instances like any external storage device. This service can be backed by a variety of enterprise storage platforms or simple NFS servers.
+
+*Object Storage (“Swift”)*::
+  Swift is a highly available distributed object store. The Swift architecture is generally comprised of several servers with unique roles. These include the proxy server, object servers, and container servers. Swift can be accessed with a native API, or can be accessed using the same S3 API that is used by Amazon Web Services (AWS).
+
+*Network Service (“Neutron”)*::
+  OpenStack Networking is a scalable, API-driven service for managing networks and IP addresses. OpenStack Networking gives users self-service control over their network configurations. Users can define, separate, and join networks on demand. This allows for flexible network models that can be adapted to fit the requirements of different applications. OpenStack Networking has a pluggable architecture that supports numerous virtual networking technologies as well as native Linux networking mechanisms including Open vSwitch and Linux Bridge.
+
+*Dashboard Service (“Horizon”)*::
+  OpenStack Horizon is a graphical user interface for managing the OpenStack components. Virtual machines instances may be launched from the Horizon UI. Horizon may be used to manage Glance images, Neutron networks and subnets, users and groups, security groups, and cryptographic keys. Various services may extend Horizon through plugins which provide additional ways to view and manage the OpenStack components. Horizon may be used by both operators and users, with permissions based on user account privileges.
+
+*Orchestration Service (“Heat”)*::
+  Heat is an OpenStack orchestration engine. It can launch multiple composite cloud applications based on text-based template files. The templates can describe infrastructure resources including servers, floating IP addresses, storage, security groups, and users.
+
+*Telemetry Service (“Ceilometer”)*::
+  Ceilometer provides infrastructure to collect measurements within OpenStack. It is primarily useful for monitoring and metering. Most services have a Ceilometer plugin. It is centralized , so no two agents need to be written to collect the same data.
+
+*Hypervisor (“KVM” or “QEMU”)*::
+  The hypervisor is the virtualization software that runs on the Compute host and manages the environment in which the VM operates. KVM (Kernel-based Virtual Machine) uses the OS kernel to manage the VM, while QEMU (short for Quick EMUlator) uses user-space libraries to manage the VM. OpenStack Compute uses KVM for better performance, but can be configured to use QEMU if the Compute host itself is running in a VM managed by KVM.
+
+=== OpenStack Neutron Terminology
+
+The Neutron server is the core of OpenStack Networking. It connects to the various components which together provide the network infrastructure for the virtual machines, as well as for the connectivity between the virtual machines and the various services they connect to.
+
+[glossary]
+*Neutron Core Plugin*::
+  A plugin is loaded at runtime by the Neutron service. The plugin processes API calls and stores the resulting logical network data and mappings in a backend database. Because each plugin may store different data about each network, the resulting data stored in the database will depend on which plugin is chosen. RHEL OSP 7 uses the Modular Layer 2 (ML2) plugin, which specifies a type driver and a mechanism driver to provide functionality for a chosen network topology.
+
+*Neutron Service Plugin*::
+  These allow various functions as service. Load-Balancer-as-a-Service, Firewall-as-a-Service, and others are available. The services may be provided by hardware or software, but are configured through the Neutron API.
+
+*Open vSwitch (OVS)*::
+  This is a virtual network technology that emulates a network switch, where data received on a port is forwarded to the appropriate ports based on destination MAC address. If the MAC address is known to reside on a VM on the same compute host, data is forwarded to that VM. Otherwise, data is forwarded to the compute host which houses the VM with that MAC address. OVS is compatible with flat networks, VLANs, VXLANs, and GRE tunnels. By default, RHEL OSP 7 will configure Neutron to use OVS for creating bridges that are used for VM networking. Linux Bridge may be used as an alternate configuration.
+
+*Linux Bridge*::
+  An alternate method for attaching VMs to the physical network is to use the Linux Bridge functionality, which is built into the Linux kernel, instead of Open vSwitch. Linux Bridge simulates network switches, where each frame is forwarded according to a MAC learning table. Although Linux Bridge has fewer features than Open vSwitch, it does support embedded VLAN tagging, making it better suited to certain Network Function Virtualization (NFV) applications. Linux Bridge is not the default for RHEL OSP 7, and must be enabled prior to deployment.
+
+*Open vSwitch Agent*::
+  When using Open vSwitch, an agent runs on each compute node. The agent gathers the configuration and mappings from the central database and communicates with the local compute host to configure the networking for the system and the VMs.
+
+*Underlay Network*::
+  This refers to the actual physical network provided by switches, routers, and cabling. It also refers to any features that are enabled in switch hardware which influence the topology of the network, such as VLANs. The Undercloud uses the Underlay network. The Compute hosts participate in the Underlay network, and the Underlay network provides the Management network and the provisioning network used for deployment (a common scenario is to provision hosts using the Management network, and then use the Management network for managing the hosts).
+
+*Overlay Network*::
+  This refers to the virtual network which is visible to the VMs. An overlay may be comprised of a mesh of tunnels, such as in GRE or VXLAN. It may also refer to the range of VLANs that get used by Neutron for tenant networks in VLAN mode. Overlay networks provide support for per-tenant networks, which may have overlapping IP addresses between tenants or projects. The compute hosts themselves do not participate in the Overlay network, but do run software or drivers to provide the virtual networks to the VMs which they host.
+
+=== OpenStack TripleO Terminology
+
+TripleO is an OpenStack deployment and management application. The name is derived from OpenStack On OpenStack (OOO), which references the architecture of TripleO. TripleO uses OpenStack components to deploy OpenStack on hardware. In RHEL OSP versions 5 and 6 TripleO was available as a Tech Preview. In RHEL OSP 7, TripleO is used as the official installer.
+
+[glossary]
+*Undercloud*::
+  An instance of OpenStack which is used to provision and deploy OpenStack on servers. TripleO views the bare metal machines as analogous to compute nodes in an OpenStack deployment. The undercloud is used to manage and provision the bare metal machines into the various controllers and nodes used in OpenStack.
+
+*Overcloud*::
+  The overcloud is the OpenStack IaaS environment, comprised of OpenStack service controllers, compute nodes, and storage nodes. TripleO automates the deployment of the Overcloud, using the undercloud to configure the pool of available servers.
+
+*Bare Metal Management (“Nova”)*::
+  TripleO reuses the Nova service from OpenStack in a mode where the nodes being managed are bare metal servers. Metadata about each node is kept in the Nova database.
+
+*Bare Metal Provisioning (“Ironic”)*::
+  Ironic provisions bare metal (as opposed to virtual) machines by leveraging common technologies such as PXE boot and IPMI to cover a wide range of hardware, while supporting pluggable drivers to allow vendor-specific functionality to be added.
+
+*Deployment Orchestration (“Heat” and “Tuskar”)*::
+  TripleO uses Heat templates to configure the overcloud. Heat can be used directly to manage resources, but Tuskar adds an API and a GUI. RHEL OSP 7 primarily uses Tuskar to manage resources, and Tuskar leverages the Heat templates.
+
+*Bare Metal Telemetry (“Ceilometer”)*::
+  TripleO uses Ceilometer to meter and monitor the bare metal servers in the Undercloud. The hardware node status is monitored, and statistics such as network utilization and disk instrumentation are collected. Metrics and instrumentation data can be rolled up for visualization.
+
+*Undercloud Dashboard (“Horizon”)*::
+  The bare metal environment may be managed by operators using Horizon. The Undercloud dashboard is strictly for operators, who can deploy, manage, and monitor the infrastructure through the UI. Vendor-specific integration provides management interfaces for commercial hardware and software.
+
+
+[appendix]
+[[Appendix-Networking_terminology]]
+== Networking Terminology
+
+=== OpenStack Network Names and Functions
+
+These networks are referred to throughout this document. Some of these networks are assigned to a dedicated interface on specific nodes within the OpenStack deployment, others may be VLANs on shared interfaces.
+
+[glossary]
+*Provisioning Network*::
+  This is the network that is used to provision the bare metal servers which operate as nodes within the OpenStack deployment. The provisioning network allows nodes to be added to the OpenStack deployment and then have their operating system and OpenStack components installed automatically via the Undercloud server. DCHP/PXE and TFTP services are provided on this network, so it must be delivered as the native VLAN to the interfaces used for network booting.
+
+*Internal API Network*::
+  OpenStack components use this network to communicate with the various OpenStack API endpoints. This network is also used for RPC communication between OpenStack components.
+
+*Public API Network*::
+  This network, when present, is where OpenStack APIs are made public to connections coming from outside the cloud. This allows scripted actions, or connections from management tools. The Horizon dashboard is also generally available on this network. Most commonly Horizon and the Public APIs share the External network.
+
+*Cluster Management Network*::
+  An optional private network for various HA components to share state data, and to track state for automated failover. This network is only shared by the controllers. Using a Cluster Management network provides isolation and security for the HA heartbeats. By default, this traffic is hosted on the Internal API network.
+
+*Tenant Network(s)*::
+  Virtual machines communicate over these networks within the cloud deployment. In the case of GRE or VXLAN mode tenant networks, the networks are delivered via tunnels over a single VLAN. In the case of VLAN mode tenant networks, individual VLANs will correspond to tenant networks.
+
+*Storage Network*::
+  This network is used for VM access to storage resources. The Storage APIs (Glance, Swift, Cinder) are accessible on these networks, and storage is accessed by the VMs on this network using those APIs.
+
+*Storage Management Network*::
+  This network is shared between the front-end and back-end storage nodes. This network is used by the storage controllers to access the nodes where the data is stored. Storage clustering and replication also take place on this network.
+
+*External Network*::
+  The network that provides external connectivity for tenant virtual machines. Typically there are network address translation (NAT) services running on the External networks to translate between public addresses and the private addresses assigned to the virtual machines. Depending on the configuration, the External network may only be connected to the controllers, or it may be connected directly to the compute nodes when using DVR.
+
+*Provider Networks*::
+  These are optional networks created by the OpenStack administrator that map directly to existing physical networks in the datacenter. Provider networks can be used for giving VMs access to internal infrastructure networks. Provider networks can also be used for external connectivity, for instance a set of Webserver VMs can be placed directly on a DMZ network.
+
+=== OSI Network Models
+
+The _Open Systems Interconnection_ model (OSI) is a conceptual model that characterizes the internal workings of a communication system by partitioning it into abstract layers. This allows for a common language to describe dependencies between protocols communication layers. For instance, a data link (layer 2) depends on a physical connection (layer 1) in order for two systems to exchange data.
+
+- *Layer 1*: _Physical Layer_ – Cabling and electrical or optical repeaters.
+- *Layer 2*: _Data Link Layer_ – Point-to-point or shared-media protocols such as Ethernet.
+- *Layer 3*: _Network Layer_ – Logical addressing, routing, and delivery such as IP traffic.
+- *Layer 4*: _Transport Layer_ – Transport that provides delivery of data packets, such as UDP and TCP.
+- *Layer 5*: _Session Layer_ – Communication and sessions between hosts.
+- *Layer 6*: _Presentation Layer_ – Data representation, encryption, data structures.
+- *Layer 7*: _Application Layer_ – Applications and higher-level protocols, such as HTTP, electronic mail delivery, or file sharing protocols.
+
+=== Networking Terminology
+
+[glossary]
+*Ethernet*::
+  This is the most common shared-media in use in datacenters, and it is implemented in a set of protocols defined in IEEE standard 802.3. The protocols defined in Ethernet cover media access control, negotiation of speed and queuing strategies, and communication between hosts. Ethernet is not a reliable protocol, and traffic is sent in frames of varying sizes which may be dropped due to congestion or collision. For this reason, a variety of upper layer protocols such as TCP are used to guarantee delivery of data traffic. Ethernet operates at layer 2 in the OSI Model.
+
+*Broadcast Domain*::
+  This is the area of a shared-media network where broadcast traffic is replicated. In an Ethernet network, this would be all the hosts attached to the same subnet. Within the same subnet, hosts find each other by way of their Media Access Control (MAC) address. This is discovered either by receiving traffic from a host, or by using the Address Resolution Protocol (ARP). ARP sends a broadcast to all hosts asking which host is using a particular IP address, and waits for a response from the host indicating its MAC address. A broadcast domain is delimited by a VLAN, a virtual network, or a routed subnet. Many network failures affect an entire broadcast domain, so networking best practices often limit the size of the broadcast domain to limit the scope of failures.
+
+*Bonded Ethernet (Bond)*::
+  A bond is a set of physical Ethernet links which have been virtually combined using one of several protocols for link aggregation. The links work together to share bandwidth and provide fault tolerance in case one of the member links loses connectivity. Although several bonding protocols exist (EtherChannel, Link Aggregation, ISL, etc.), both ends of a link must be using the same protocol in order to establish a bond.
+
+*Ethernet NIC Teaming*::
+  Some of the modes provided by the Linux Bonding driver do not use a bonding protocol, but instead use strategies to provide failover or load sharing over multiple links with no bonding support on the switch. This is known as NIC Teaming, and while teaming can provide active/passive failover and load sharing for outbound traffic, the mechanisms for load sharing for inbound traffic are not supported with RHEL-OSP 5. See section 3.3 (“Bonded Ethernet Links”) for more information about Linux Bonding modes.
+
+*Virtual LAN (VLAN)*::
+  The VLAN protocol, which is defined in IEEE standard 802.1q, defines a method of subdividing an Ethernet link into multiple virtual links, which each act like a physical link but share the bandwidth of the link as a whole. Each frame sent over Ethernet when using VLANs is tagged using a 4 byte header which is inserted into the frame header. The VLAN identifier may be added by a VLAN-aware Ethernet switch, or by the host if the host is using a VLAN-aware Ethernet driver. Neutron enables VLANs on hosts when the VLAN type driver is used.
+
+*Ethernet Trunk*::
+  The word “trunk” has historically been used to define more than one thing, and was for a time used to describe bonds. For the purposes of this document, trunk refers to an Ethernet link which is carrying traffic tagged with VLAN identifiers. A trunk can be configured with any number of VLANs up to the maximum of 4096 defined in the VLAN standard (not all of the 4096 are available for use, a handful are reserved).
+
+*Native VLAN*::
+  On a trunked Ethernet link, packets sent and received on the native VLAN do not have a VLAN tag added. When a link is VLAN-aware, any frames which are received without a VLAN tag are assumed to be on the Native VLAN, which is configurable. The Native VLAN is used for traffic prior to the host OS loading and configuring the Ethernet driver, so the Native VLAN is used for traffic early in the boot process, such as DHCP and PXE protocols.
+
+*Dynamic Host Configuration Protocol (DHCP)*::
+  This is the protocol which is used by a host to request an IP address from a DHCP server. DHCP is also used by VMs to request IP addresses, and Neutron typically manages a DHCP server for each physical or virtual network segment which is used by the VMs. In addition to negotiating an IP address, other metadata may be sent by the client and/or server to be used in dynamic configuration of network links.
+
+*DHCP Helper Address*::
+  This is an address configured on a router or other network device running a DHCP proxy. The helper address is where DHCP requests seen on a local network are forwarded, such as an OpenStack installation server.
+
+*Preboot Execution Environment (PXE)*::
+  This specification describes a standardized client/server environment to boot from a network. PXE is generally used in conjunction with DHCP in order to instruct a host to download a boot image which may then be used either as the host OS or as an installation image to install a permanent OS on the host. The RHEL-OSP Installer and TripleO use PXE to boot installation images in order to deploy OpenStack hosts. Nova, Neutron, and Glance work together to use PXE to launch a VM with an OS image that runs in ephemeral (temporary) storage inside the hypervisor.
+
+*Trivial File Transfer Protocol (TFTP)*::
+  This is the protocol used to transfer OS images during the PXE boot process. TFTP is used because it a simple, low-memory protocol which includes basic verification of transfer completeness. It does not use authentication, so it is generally only used inside a trusted network segment.
+
+*Internet Protocol (IP)*::
+  This is the basic protocol used to transfer datagrams over routed networks. It is connectionless, so higher level protocols are required to establish connections and manage the transfer of data. IPv4 is the most common version, and although OpenStack contains support for IPv6, it is less commonly used than IPv4. IP is a layer 3 (Network) addressing protocol.
+
+*User Datagram Protocol (UDP)*::
+  This is a transaction-oriented connectionless transport mechanism that uses IP addresses and sends simple packets from a source to a destination. It is suitable for simple query-response protocols, such as the Domain Name System (DNS) or the Network Time Protocol (NTP). Since UDP doesn't rely on a connection handshake, it can send data without waiting for a response from the destination. UDP provides checksums to ensure data integrity, and port numbers for addressing different functions at both the source and destination. UDP does not include retransmission, so if a packet is lost, or if the checksum proves that the packet was corrupted, it is up to the application to request that the data be resent. UDP is a layer 4 transport protocol.
+
+*Transmission Control Protocol (TCP)*::
+  This is a connection-oriented transport protocol that is used for most protocols in use on the Internet. It provides reliable, ordered, and error-checked delivery of data that is transmitted as packets that are retransmitted in case of failure. The packets are reassembled in order and delivered to the application in a data stream. TCP is a layer 4 transport and control protocol.
+
+*Generic Routing Encapsulation (GRE)*::
+  This is a tunneling protocol that can encapsulate a wide variety of networking protocols inside a virtual point-to-point network. GRE is a protocol that sits on top of IP, and does not rely on UDP or TCP. GRE can transparently carry traffic from layer 2 and up, with encapsulation and decapsulation at either end or the tunnel. GRE is often used for VPN networks, but it can also be used to bridge networks to one another over a transparent tunnel. Although GRE can tunnel a wide variety of protocols, in Neutron it is used to carry Ethernet traffic. Since GRE tunnels segregate traffic using unique Tunnel IDs, VLANs are unnecessary. Neutron has a type driver for GRE that connects VMs to one another via GRE tunnels, and makes it appear as if the VMs are connected via a shared-media link such as an Ethernet switch.
+
+*Virtual Extensible LAN (VXLAN)*::
+  This is a network virtualization technology that encapsulates layer 2 Ethernet frames within layer 4 UDP packets. VXLAN uses a VLAN-like tagging method to provide network segregation. The traffic it carries is encapsulated and decapsulated at either end of the tunnel. The VXLAN Neutron type driver makes VLANs unnecessary. The Neutron VXLAN type driver connects VMs to one another with unique VXLAN Network Identifier (VNI), and makes it appear as if the VMs are connected via a shared-media link such as an Ethernet switch.
+
+*Linux Network Namespaces*::
+  This feature of the Linux kernel (2.6.27+) allows separate IP addresses and routes within each Namespace. Neutron uses this feature to allow multiple tenants to use overlapping IP addresses and for each tenant network to have it's own routing.
