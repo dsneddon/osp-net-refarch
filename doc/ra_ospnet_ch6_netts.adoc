@@ -1,0 +1,140 @@
+[chapter 6]
+== Network Troubleshooting
+
+=== Connectivity Problems Between VMs With Neutron In VLAN Mode
+
+A common cause of connectivity problems when using VLAN mode in Neutron is an incorrect OVS configuration. Ensure that all hosts and controllers have the same VLAN ranges and bridge mappings:
+
+ network_vlan_ranges=
+ bridge_mappings=
+
+The VLAN ID remap rules can be seen with this command:
+
+[subs=+quotes]
+----
+ $ *ovs-ofctl dump-flows br-<vlan_bridge or tun>*
+----
+
+=== Connectivity Problems Between VMs With Neutron In GRE or VXLAN Mode
+
+When using GRE or VXLAN type drivers, ensure that the tunneling configurations are the same on all controllers and hosts:
+
+ tunnel_type=<vxlan|gre>
+ tunnel_id_ranges= 1:1000
+ tenant_network_type=<vxlan|gre>
+ tunnel_bridge=br-tun
+
+A useful command for validating that the tunnels are up when using OVS is to look at the ovsdb with this command:
+
+[subs=+quotes]
+----
+ $ *ovsdb-client dump*
+----
+
+You will see OVS ports for all the tunnels, including local_ip and remote_ip pairs for each of the tunnels, corresponding to the endpoints on the compute hosts.
+
+=== Virtual Machine Virtual Ethernet Interfaces
+
+The Neutron ports that are attached to VMs are implemented using Open vSwitch or Linux bridges (depending on configuration). In this reference architecture, OVS bridges were used.
+
+Steps to capture VM traffic from a Compute host:
+
+1. In order to know which port on a Compute host belongs to a particular VM, get the port for the IP associated with the IP address:
++
+[subs=+quotes]
+----
+ # *neutron port-list | grep 172.21.0.54*
+ | 2b0f361c-b804-41d5-aa29-3b14b9b62114 |      | fa:16:3e:71:71:b9 | {"subnet_id": "a2262eb8-28f0-4b91-a729-e015fe358371", "ip_address": "172.21.0.54"} |
+----
++
+2. The interface on the Compute host will have a name that is constructed of the first 11 characters of the Neutron Port ID, in this case “2b0f361c-b8”. You can see this reflected on the Compute host in both the interfaces shown via ifconfig and the OVS ports shown via ovs-vsctl show:
++
+[subs=+quotes]
+----
+ # *ifconfig | grep 2b0f361c-b8i*
+ qbr2b0f361c-b8: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 8950
+ qvb2b0f361c-b8: flags=4419<UP,BROADCAST,RUNNING,PROMISC,MULTICAST>  mtu 8950
+ qvo2b0f361c-b8: flags=4419<UP,BROADCAST,RUNNING,PROMISC,MULTICAST>  mtu 8950
+ tap2b0f361c-b8: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 8950
+
+ # *ovs-vsctl show | grep 2b0f361c-b8*
+        Port "qvo2b0f361c-b8"
+            Interface "qvo2b0f361c-b8"
+----
++
+3. In closer detail, the port can be shown via the command ovs-vsctl show as part of the Integration bridge:
++
+[subs=+quotes]
+----
+ 14d7e96d-a6a0-49e8-834b-1e404f3b0bb2
+    Bridge br-int
+        Port "qvo2b0f361c-b8"
+            tag: 1
+            Interface "qvo2b0f361c-b8"
+----
++
+NOTE: This interface has a tag of 1, which corresponds to the VLAN ID of the Tenant network to which it is attached.
++
+4. Capture packets from the port using the interface "qvo2b0f361c-b8":
++
+[subs=+quotes]
+----
+ # *tcpdump -i qvo2b0f361c-b8*
+ tcpdump: WARNING: qvo2b0f361c-b8: no IPv4 address assigned
+ tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+ listening on qvo2b0f361c-b8, link-type EN10MB (Ethernet), capture size 65535 bytes
+ 23:08:02.647177 IP 172.21.0.53 > 172.21.0.54: ICMP echo request, id 7075, seq 4, length 64
+ 23:08:02.647490 IP 172.21.0.54 > 172.21.0.53: ICMP echo reply, id 7075, seq 4, length 64
+----
+
+=== Linux IP Namespaces
+
+In order to troubleshoot VM connectivity issues, it is often necessary to look inside the various IP namespaces on the Network controller, which have their own IP address space and routing tables.
+
+Run ip netns to get a list of the namespaces in use on the Neutron Network Controller
+
+[subs=+quotes]
+----
+ [root@networkcontroller]# *ip netns*
+ qrouter-73eb0fbd-86b2-485e-a95f-4bd26aa6f3a7
+ qrouter-20c98e71-4087-4004-8ae8-244a2744e545
+ qdhcp-57263df2-9a72-40e6-9811-853feaaba0f4
+ qdhcp-6fa8e4f8-9164-47aa-8729-077a61724cce
+ qdhcp-2129badb-b622-4019-85f5-21e95814d523
+----
+
+Here you can see that there are namespaces for two Neutron routers and three Neutron DHCP agents. Since each namespace can have its own IP space and routing tables, the routers may have a different default gateway than the system. To see the routing table of the router, we use  ip netns exec using the router namespace and run the command ip r.
+
+[subs=+quotes]
+----
+ [root@networkcontroller]# *ip netns exec \
+ > qrouter-20c98e71-4087-4004-8ae8-244a2744e545 ip r*
+ default via 10.1.247.94 dev qg-5bf6c321-42
+ 10.1.247.64/27 dev qg-5bf6c321-42  proto kernel  scope link  src 10.1.247.73
+ 172.21.0.0/24 dev qr-51136d4b-50  proto kernel  scope link  src 172.21.0.1
+----
+
+This Neutron router has a route to the tenant network 172.21.0.0/24, as well as a route to the external network 10.1.247.64/27, and the default gateway is address 10.1.247.94 on the external network.
+
+Any command can be run in the context of a network namespace, such as ping, traceroute,  telnet, or even bash in order to validate connectivity. From the Network controller's default namespace it may not be possible to ping a VM on a tenant network, but it is possible from inside the namespace associated with a router with a port on that tenant network.
+
+[subs=+quotes]
+----
+ [root@networkcontroller ~]# *ping -c3 172.21.0.51*
+ PING 172.21.0.51 (172.21.0.51) 56(84) bytes of data.
+
+ --- 172.21.0.51 ping statistics ---
+ 3 packets transmitted, 0 received, 100% packet loss, time 1999ms
+
+ [root@networkcontroller ~]# *ip netns exec \
+ > qrouter-20c98e71-4087-4004-8ae8-244a2744e545 bash*
+
+ [root@networkcontroller ~]# *ping -c3 172.21.0.51*
+ PING 172.21.0.51 (172.21.0.51) 56(84) bytes of data.
+ 64 bytes from 172.21.0.51: icmp_seq=1 ttl=64 time=1.71 ms
+ 64 bytes from 172.21.0.51: icmp_seq=2 ttl=64 time=0.422 ms
+ 64 bytes from 172.21.0.51: icmp_seq=3 ttl=64 time=0.479 ms
+
+ --- 172.21.0.51 ping statistics ---
+ 3 packets transmitted, 3 received, 0% packet loss, time 2002ms
+----

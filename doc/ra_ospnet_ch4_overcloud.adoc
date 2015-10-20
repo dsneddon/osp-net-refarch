@@ -1,0 +1,793 @@
+[chapter 4]
+== Configuring Overcloud Networking
+
+This section describes the steps required to configure the networking for the Overcloud. The configuration is done using Heat template parameters on the Undercloud prior to deploying the Overcloud. The steps below assume that the Undercloud has already been installed. All steps are performed via an SSH shell on the Undercloud, logged in as the non-root user that was used to install the Undercloud. This reference architecture uses the stack user.
+
+=== Overview
+In order to use network isolation, we have to define our overcloud networks. Each will have an IP subnet, a range of IP addresses to use on that subnet, and a VLAN ID. These parameters will be defined in our network environment file.
+In addition to the global settings in the network environment, there is a template that determines the network interface controller (NIC) configuration for each role. In some cases, these templates will need to be customized to match the actual hardware configuration.
+
+The network configuration is done by Heat, using a set of templates that represent nested stacks that model the network configuration. Heat communicates with the Neutron API running on the Undercloud to create the isolated networks, and to assign Neutron ports on those networks. Neutron will assign a static IP to each port, and Heat will use those static IPs to configure networking on the overcloud nodes. A utility called os-net-config runs on each overcloud node at provisioning time to configure host-level networking.
+
+=== Reference Network Architecture
+
+The physical hosts used in the development of this reference network architecture are represented in the diagram below. Each system was equipped with four network interfaces for data, plus a dedicated interface for the system IPMI controller. The first network interface was used for the Provisioning network on the Overcloud hosts, and the second and third interfaces were bonded and configured for tagged VLANs.
+
+The Ethernet switches that were used in this reference architecture were Juniper 48-port EX-series switches. Each rack has a pair of these switches configured as a virtual chassis. One half of each bond was connected to one of the two switches, creating redundancy should one of the switches go down.
+
+The Provisioning interface does not have redundancy in this case. Since the Overcloud will continue to function without the provisioning network, this is considered an acceptable risk. Should the switch carrying the provisioning network go down, it would have to be replaced in a reasonable time to prevent clock skew if the overcloud nodes cannot reach the NTP server. Also, Heat stack updates and package updates on the overcloud nodes would not be possible while the provisioning network is down.
+
+The VLANs that were used in this reference architecture were:
+
+- Provisioning – VLAN 102
+- Tenant (tunneling) – VLAN 205
+- Internal API – VLAN 201
+- Storage – VLAN 204
+- Storage Management – VLAN 203
+- External – VLAN 104
+- Floating IP – VLAN 202
+- Tenant VLAN networks – VLAN 2001-2100
+
+[[image-refarch-net]]
+.image-refarch-net
+image::images/ra_ospnet_7.png[caption="Figure 4.1: " title="Reference Network Architecture Network Connections" align="center"]
+
+The switch port configurations were the same for each node in the environment. Interface names on the nodes were em1, em2, p2p1, and p2p1. The ports were connected to alternating top-of-rack switches:
+
+- Switch A – em1: Provisioning network on the native VLAN
+- Switch B – em2: Not connected
+- Switch A – p2p1: Bond link 1, trunked VLANs 104, 201, 203, 204, and 205
+- Switch B – p2p2: Bond link 2, trunked VLANs 104, 201, 203, 204, and 205
+
+=== Creating an Environment File
+
+The network configuration is defined using templates in the TripleO Heat templates directory:
+_/usr/share/openstack-tripleo-heat-templates/_
+
+Rather than modify these templates directly, we will override some of the values in these templates with values that match the local environment. This is done by creating a set of custom values that will be used instead of the defaults. These custom values are put into an environment file, with values that correspond to the particular environment where the Overcloud is being deployed.
+
+[subs=+quotes]
+----
+ $ *touch ~/environments/network-environment.yaml*
+----
+
+The following steps will populate the _network-environment.yaml_ file and explain the parameters. Use a text editor to edit the file, and replace the example values with values that match the local environment.
+
+=== Example Network Environment File
+
+Here is an example of a basic _network-environment.yaml_ file. This
+file was used to deploy the reference architecture. The values in the
+_parameter_defaults_ section will need to be customized for the local environment.
+
+[subs=+quotes]
+----
+ resource_registry
+  # Network Interface templates to use (these files must exist)
+  OS::TripleO::BlockStorage::Net::SoftwareConfig:
+    /home/stack/nic-configs/cinder-storage.yaml
+  OS::TripleO::Compute::Net::SoftwareConfig:
+    /home/stack/nic-configs/compute.yaml
+  OS::TripleO::Controller::Net::SoftwareConfig:
+    /home/stack/nic-configs/controller.yaml
+  OS::TripleO::ObjectStorage::Net::SoftwareConfig:
+    /home/stack/nic-configs/swift-storage.yaml
+  OS::TripleO::CephStorage::Net::SoftwareConfig:
+    /home/stack/nic-configs/ceph-storage.yaml
+
+ parameter_defaults:
+  # This section is where deployment-specific configuration is done
+  # Customize the IP subnets to match the local environment
+  InternalApiNetCidr: 172.17.0.0/24
+  StorageNetCidr: 172.18.0.0/24
+  StorageMgmtNetCidr: 172.19.0.0/24
+  TenantNetCidr: 172.16.0.0/24
+  ExternalNetCidr: 10.0.0.0/24
+  # Customize the IP ranges on each network to use for static IPs and VIPs
+  InternalApiAllocationPools: [{'start': '172.17.0.10', 'end': '172.17.0.200'}]
+  StorageAllocationPools: [{'start': '172.18.0.10', 'end': '172.18.0.200'}]
+  StorageMgmtAllocationPools: [{'start': '172.19.0.10', 'end': '172.19.0.200'}]
+  TenantAllocationPools: [{'start': '172.16.0.10', 'end': '172.16.0.200'}]
+  # Leave room if the external network will also be used for floating IPs
+  ExternalAllocationPools: [{'start': '10.0.0.10', 'end': '10.0.0.50'}]
+  # Gateway router for the external network
+  ExternalInterfaceDefaultRoute: 10.0.0.1
+
+  # Customize the VLAN IDs to match the local environment
+  InternalApiNetworkVlanID: 10
+  StorageNetworkVlanID: 20
+  StorageMgmtNetworkVlanID: 30
+  TenantNetworkVlanID: 40
+  ExternalNetworkVlanID: 50
+  # Set to empty string to enable multiple external networks or VLANs
+  NeutronExternalNetworkBridge: "''"
+  # Customize bonding options
+  BondInterfaceOvsOptions:
+      "bond_mode=balance-tcp lacp=active other-config:lacp-fallback-ab=true"
+----
+
+=== Configure IP Subnets
+
+Each environment will have its own IP subnets for each network. This will vary by deployment, and should be tailored to the environment. We will set the subnet information for all the networks inside our environment file. Each subnet will have a range of IP addresses that will be used for assigning IP addresses to hosts and virtual IPs. Looking closely at the subnets configured in the environment example above:
+
+[subs=+quotes]
+----
+parameter_defaults:
+
+  InternalApiNetCidr: 172.17.0.0/24
+  StorageNetCidr: 172.18.0.0/24
+  StorageMgmtNetCidr: 172.19.0.0/24
+  TenantNetCidr: 172.16.0.0/24
+  ExternalNetCidr: 10.0.0.0/24
+  InternalApiAllocationPools: [{'start': '172.17.0.10', 'end': '172.17.0.200'}]
+  StorageAllocationPools: [{'start': '172.18.0.10', 'end': '172.18.0.200'}]
+  StorageMgmtAllocationPools: [{'start': '172.19.0.10', 'end': '172.19.0.200'}]
+  TenantAllocationPools: [{'start': '172.16.0.10', 'end': '172.16.0.200'}]
+  # Make sure to leave room for floating IPs in external subnet
+  ExternalAllocationPools: [{'start': '10.0.0.10', 'end': '10.0.0.50'}]
+
+  # Gateway router for the external network
+  ExternalInterfaceDefaultRoute: 10.0.0.1
+----
+
+In this case, the Allocation Pool for the Internal API network starts at .10 and continues to .200. This results in the static IPs and virtual IPs that are assigned starting at .10, and will be assigned upwards with .200 being the highest assigned IP. The External network hosts the Horizon dashboard and the OpenStack public API. If the External network will be used for both cloud administration and floating IPs, we need to make sure there is room for a pool of IPs to use as floating IPs for VM instances. Alternately, the floating IPs can be placed on a separate VLAN (which is configured by the operator post-deployment).
+
+=== Configuring VLANs and Bonding Options
+
+In the example environment above, the VLANs and bonding options are set. These will need to be overridden to match the local environment.
+
+[subs=+quotes]
+----
+  # Customize the VLAN IDs to match the local environment
+  InternalApiNetworkVlanID: 10
+  StorageNetworkVlanID: 20
+  StorageMgmtNetworkVlanID: 30
+  TenantNetworkVlanID: 40
+  ExternalNetworkVlanID: 50
+
+  # Customize bonding options
+  BondInterfaceOvsOptions:
+      "bond_mode=balance-tcp lacp=active other-config:lacp-fallback-ab=true"
+----
+
+The VLANs will need to be customized to match the environment. The values entered here will be used in the network interface configuration templates covered below.
+
+It is recommended to deploy a Tenant VLAN (which is used for tunneling GRE and/or VXLAN) even if Neutron VLAN mode is chosen and tunneling is disabled at deployment time. This requires the least customization at deployment time, and leaves the option available to use tunnel networks as utility networks, or for network function virtualization in the future.
+
+The _BondInterfaceOvsOptions_ parameter will pass the options to Open vSwitch when setting up bonding (if used in the environment). The value above will enable fault-tolerance and load balancing if the switch supports (and is configured to use) LACP bonding. If LACP cannot be established, the bond will fallback to active/backup mode, with fault tolerance, but where only one link in the bond will be used at a time.
+
+The default bonding options will try to negotiate LACP, but will fallback to active-backup if LACP cannot be established:
+
+[subs=+quotes]
+----
+ "bond_mode=balance-tcp lacp=active other-config:lacp-fallback-ab=true"
+----
+
+This mode is safe to use without configuring the switches if active-backup mode is desired.
+
+If the switches are configured for static bonds (bonds without LACP), then an alternative set of options will enable bonding without LACP (balance-tcp is only supported on LACP bonds):
+
+[subs=+quotes]
+----
+ "bond_mode=balance-slb lacp=off"
+----
+
+Note that if bonding is not configured on the switch, using the
+balance-slb mode with LACP off.
+
+In addition, the following options may be added to the options string to tune the bond:
+
+[subs=+quotes]
+----
+ # Set the LACP heartbeat to 1 second or 30 seconds (default)
+ "other_config:lacp-time=[fast|slow]"
+
+ # Set the link detection to use miimon heartbeats or monitor carrier (default)
+  "other_config:bond-detect-mode=[miimon|carrier]"
+
+ # If using miimon, heartbeat interval in milliseconds (100 is usually good)
+ "other_config:bond-miimon-interval=100"
+
+ # Number of milliseconds a link must be up to be activated (to prevent flapping)
+ "other_config:bond_updelay=1000"
+ If bonding is not used, these options will be ignored.
+----
+
+=== Optional: Modify the Service to Network Mapping
+
+Each OpenStack service is mapped to a particular network. The service
+will bind to the IP on that network. A virtual IP will be created on
+that network and shared among all HA controllers. These values are
+defined in the _overcloud-without-mergepy.yaml_ file, and do not typically need to be changed.
+To modify which services run on which networks, the _ServiceNetMap_ can be overridden in the environment file.
+
+Here is the full set of service-to-net mappings, this can be included in the environment file, and then the networks can be customized.
+
+[subs=+quotes]
+----
+ parameter_defaults:
+  ServiceNetMap:
+    NeutronTenantNetwork: tenant
+    CeilometerApiNetwork: internal_api
+    MongoDbNetwork: internal_api
+    CinderApiNetwork: internal_api
+    CinderIscsiNetwork: storage
+    GlanceApiNetwork: storage
+    GlanceRegistryNetwork: internal_api
+    KeystoneAdminApiNetwork: internal_api
+    KeystonePublicApiNetwork: internal_api
+    NeutronApiNetwork: internal_api
+    HeatApiNetwork: internal_api
+    NovaApiNetwork: internal_api
+    NovaMetadataNetwork: internal_api
+    NovaVncProxyNetwork: internal_api
+    SwiftMgmtNetwork: storage_mgmt
+    SwiftProxyNetwork: storage
+    HorizonNetwork: internal_api
+    MemcachedNetwork: internal_api
+    RabbitMqNetwork: internal_api
+    RedisNetwork: internal_api
+    MysqlNetwork: internal_api
+    CephClusterNetwork: storage_mgmt
+    CephPublicNetwork: storage
+    ControllerHostnameResolveNetwork: internal_api
+    ComputeHostnameResolveNetwork: internal_api
+    BlockStorageHostnameResolveNetwork: internal_api
+    ObjectStorageHostnameResolveNetwork: internal_api
+    CephStorageHostnameResolveNetwork: storage
+----
+
+=== Optional: Modify Which Networks Get Deployed
+
+The settings in the _resource_registry_ section of the environment file for networks and ports do not ordinarily need to be changed. The list of networks can be changed, however, if only a subset of the networks are desired.
+
+In order to use isolated networks, the servers will need to have IP addresses on each network. We use Neutron in the Undercloud to manage IP addresses on the isolated networks, so we need to enable Neutron port creation for each network. We will override the resource registry in our environment file.
+
+[subs=+quotes]
+----
+ resource_registry
+  # This section is usually not modified, if in doubt stick to the defaults
+  # TripleO overcloud networks
+  OS::TripleO::Network::External:
+    /usr/share/openstack-tripleo-heat-templates/network/external.yaml
+  OS::TripleO::Network::InternalApi:
+    /usr/share/openstack-tripleo-heat-templates/network/internal_api.yaml
+  OS::TripleO::Network::StorageMgmt:
+    /usr/share/openstack-tripleo-heat-templates/network/storage_mgmt.yaml
+  OS::TripleO::Network::Storage:
+    /usr/share/openstack-tripleo-heat-templates/network/storage.yaml
+  OS::TripleO::Network::Tenant:
+   /usr/share/openstack-tripleo-heat-templates/network/tenant.yaml
+
+  # Port assignments for the controller role
+  OS::TripleO::Controller::Ports::ExternalPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/external.yaml
+  OS::TripleO::Controller::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::Controller::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::Controller::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage_mgmt.yaml
+  OS::TripleO::Controller::Ports::TenantPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/tenant.yaml
+  # Port assignment for the Redis VIP on isolated network
+  OS::TripleO::Controller::Ports::RedisVipPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/vip.yaml
+
+  # Port assignments for the compute role
+  OS::TripleO::Compute::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::Compute::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::Compute::Ports::TenantPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/tenant.yaml
+
+  # Port assignments for the ceph storage role
+  OS::TripleO::CephStorage::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::CephStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage_mgmt.yaml
+
+  # Port assignments for the swift storage role
+  OS::TripleO::SwiftStorage::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::SwiftStorage::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::SwiftStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage_mgmt.yaml
+
+  # Port assignments for the block storage role
+  OS::TripleO::BlockStorage::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::BlockStorage::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::BlockStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage_mgmt.yaml
+----
+
+The first section of this file has the resource registry declaration
+for the _OS::TripleO::Network::*_ resources. By default these
+resources point at a _noop.yaml_ file that does not create any networks. By pointing these resources at the YAML files for each network, we enable the creation of these networks.
+
+The next several sections create the IP addresses for the nodes in each role. The controller nodes will have IPs on each network. The compute and storage nodes will each have IPs on a subset of the networks.
+
+To deploy without one of the pre-configured networks, disable the
+network definition and the corresponding port definition for the role.
+For instance, all references to _storage_mgmt.yaml_ could be replaced
+with _noop.yaml_:
+
+[subs=+quotes]
+----
+ resource_registry
+  # This section is usually not modified, if in doubt stick to the defaults
+  # TripleO overcloud networks
+  OS::TripleO::Network::External:
+    /usr/share/openstack-tripleo-heat-templates/network/external.yaml
+  OS::TripleO::Network::InternalApi:
+    /usr/share/openstack-tripleo-heat-templates/network/internal_api.yaml
+  OS::TripleO::Network::StorageMgmt:
+    /usr/share/openstack-tripleo-heat-templates/network/noop.yaml
+  OS::TripleO::Network::Storage:
+    /usr/share/openstack-tripleo-heat-templates/network/storage.yaml
+  OS::TripleO::Network::Tenant:
+   /usr/share/openstack-tripleo-heat-templates/network/tenant.yaml
+
+  # Port assignments for the controller role
+  OS::TripleO::Controller::Ports::ExternalPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/external.yaml
+  OS::TripleO::Controller::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::Controller::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::Controller::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
+  OS::TripleO::Controller::Ports::TenantPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/tenant.yaml
+  # Port assignment for the Redis VIP on isolated network
+  OS::TripleO::Controller::Ports::RedisVipPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/vip.yaml
+
+  # Port assignments for the compute role
+  OS::TripleO::Compute::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::Compute::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::Compute::Ports::TenantPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/tenant.yaml
+
+  # Port assignments for the ceph storage role
+  OS::TripleO::CephStorage::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::CephStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
+
+  # Port assignments for the swift storage role
+  OS::TripleO::SwiftStorage::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::SwiftStorage::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::SwiftStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
+
+  # Port assignments for the block storage role
+  OS::TripleO::BlockStorage::Ports::InternalApiPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
+  OS::TripleO::BlockStorage::Ports::StoragePort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
+  OS::TripleO::BlockStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
+
+ parameter_defaults:
+  ServiceNetMap:
+    SwiftMgmtNetwork: storage
+    CephClusterNetwork: storage
+----
+
+By using _noop.yaml_, no network or ports are created, so the services
+on the Storage Management network would default to the provisioning
+network. This can be changed in the _ServiceNetMap_ (see above) in order to move the storage management services to another network, such as storage.
+
+=== Network Interface Configuration Template Registry
+In the environment file, we will point to a network interface configuration template for each role. These files will be created and customized in the next steps:
+
+[subs=+quotes]
+----
+  # Network Interface templates to use
+  OS::TripleO::BlockStorage::Net::SoftwareConfig:
+    /home/stack/nic-configs/cinder-storage.yaml
+  OS::TripleO::Compute::Net::SoftwareConfig:
+    /home/stack/nic-configs/compute.yaml
+  OS::TripleO::Controller::Net::SoftwareConfig:
+    /home/stack/nic-configs/controller.yaml
+  OS::TripleO::ObjectStorage::Net::SoftwareConfig:
+    /home/stack/nic-configs/swift-storage.yaml
+  OS::TripleO::CephStorage::Net::SoftwareConfig:
+    /home/stack/nic-configs/ceph-storage.yaml
+----
+
+=== Configuring the Network Interfaces
+
+The network interfaces are configured on each system by the
+os-net-config tool. That tool is configured using templates. There are
+sample configurations inside of the
+_/usr/share/openstack-tripleo-heat-templates/network/config_ directory on the Undercloud.
+
+First we will copy the sample configuration templates from one of the subdirectories, for example bond-with-vlans (for systems with 3 or more data NICs in addition to IPMI):
+
+[subs=+quotes]
+----
+ $ mkdir ~/net-configs
+ $ export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates
+ $ cp $TEMPLATE_DIR/network/config/bond-with-vlans/* ~/net-configs
+----
+
+Another set of examples for systems with a single or dual data NIC is in single-nic-vlans:
+
+[subs=+quotes]
+----
+ $ mkdir ~/net-configs
+ $ export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates
+ $ cp $TEMPLATE_DIR/network/config/single-nic-vlans/* ~/net-configs
+----
+
+Next we need to customize these templates to fit the environment.
+Let's start by looking at the unedited sample _controller.yaml_ from the bond-with-vlans templates. This sample configuration uses the first Ethernet NIC as the provisioning network, and the second and third Ethernet NICs are a bond carrying all the Overcloud networks. The top section and the parameters section do not need to be modified. Only the section under "network_config" should be customized:
+
+[subs=+quotes]
+----
+ heat_template_version: 2015-04-30
+
+ description: >
+  Software Config to drive os-net-config with 2 bonded nics on a bridge
+  with a VLANs attached for the controller role.
+
+ parameters:
+  ExternalIpSubnet:
+    default: ''
+    description: IP address/subnet on the external network
+    type: string
+  InternalApiIpSubnet:
+    default: ''
+    description: IP address/subnet on the internal API network
+    type: string
+  StorageIpSubnet:
+    default: ''
+    description: IP address/subnet on the storage network
+    type: string
+  StorageMgmtIpSubnet:
+    default: ''
+    description: IP address/subnet on the storage mgmt network
+    type: string
+  TenantIpSubnet:
+    default: ''
+    description: IP address/subnet on the tenant network
+    type: string
+  BondInterfaceOvsOptions:
+    default: ''
+    description: The ovs_options string for the bond interface. Set things
+                 like lacp=active and/or bond_mode=balance-slb using this
+                  option.
+    type: string
+  ExternalNetworkVlanID:
+    default: 10
+    description: Vlan ID for the external network traffic.
+    type: number
+  InternalApiNetworkVlanID:
+    default: 20
+    description: Vlan ID for the internal_api network traffic.
+    type: number
+  StorageNetworkVlanID:
+    default: 30
+    description: Vlan ID for the storage network traffic.
+    type: number
+  StorageMgmtNetworkVlanID:
+    default: 40
+    description: Vlan ID for the storage mgmt network traffic.
+    type: number
+  TenantNetworkVlanID:
+    default: 50
+    description: Vlan ID for the tenant network traffic.
+    type: number
+  ExternalInterfaceDefaultRoute:
+    default: '10.0.0.1'
+    description: default route for the external network
+    type: string
+
+ resources:
+  OsNetConfigImpl:
+    type: OS::Heat::StructuredConfig
+    properties:
+      group: os-apply-config
+      config:
+        os_net_config:
+          network_config:
+            -
+              type: ovs_bridge
+              name: {get_input: bridge_name}
+              members:
+                -
+                  type: ovs_bond
+                  name: bond1
+                  ovs_options: {get_param: BondInterfaceOvsOptions}
+                  members:
+                    -
+                      type: interface
+                      name: nic2
+                      primary: true
+                    -
+                      type: interface
+                      name: nic3
+                -
+                  type: vlan
+                  device: bond1
+                  vlan_id: {get_param: ExternalNetworkVlanID}
+                  addresses:
+                    -
+                      ip_netmask: {get_param: ExternalIpSubnet}
+                  routes:
+                    -
+                      ip_netmask: 0.0.0.0/0
+                      next_hop: {get_param: ExternalInterfaceDefaultRoute}
+                -
+                  type: vlan
+                  device: bond1
+                  vlan_id: {get_param: InternalApiNetworkVlanID}
+                  addresses:
+                  -
+                    ip_netmask: {get_param: InternalApiIpSubnet}
+                -
+                  type: vlan
+                  device: bond1
+                  vlan_id: {get_param: StorageNetworkVlanID}
+                  addresses:
+                  -
+                    ip_netmask: {get_param: StorageIpSubnet}
+                -
+                  type: vlan
+                  device: bond1
+                  vlan_id: {get_param: StorageMgmtNetworkVlanID}
+                  addresses:
+                  -
+                    ip_netmask: {get_param: StorageMgmtIpSubnet}
+                -
+                  type: vlan
+                  device: bond1
+                  vlan_id: {get_param: TenantNetworkVlanID}
+                  addresses:
+                  addresses:
+                  -
+                    ip_netmask: {get_param: TenantIpSubnet}
+
+ outputs:
+  OS::stack_id:
+    description: The OsNetConfigImpl resource.
+    value: {get_resource: OsNetConfigImpl}
+----
+
+==== Configuring Interfaces
+
+The individual interfaces may need to be modified. As an example, below are the modifications that would be required to use the second NIC to connect to an infrastructure network with DHCP addresses, and to use the third and fourth NICs for the bond:
+
+[subs=+quotes]
+----
+       network_config:
+            # Add a DHCP infrastructure network to nic2
+            -
+              type: interface
+              name: nic2
+              use_dhcp: true
+              defroute: false
+            -
+              type: ovs_bridge
+              name: br-bond
+              members:
+                -
+                  type: ovs_bond
+                  name: bond1
+                  ovs_options: {get_param: BondInterfaceOvsOptions}
+                  members:
+                    # Modify bond NICs to use nic3 and nic4
+                    -
+                      type: interface
+                      name: nic3
+                      primary: true
+                    -
+                      type: interface
+                      name: nic4
+----
+
+When using numbered interfaces ("nic1", "nic2", etc.) instead of named interfaces ("eth0", "eno2", etc.), the network interfaces of hosts within a role do not have to be exactly the same. For instance, one host may have interfaces em1 and em2, while another has eno1 and eno2, but both hosts' NICs can be referred to as nic1 and nic2.
+
+The numbered NIC scheme only takes into account the interfaces that are live (have a cable attached to the switch). So if you have some hosts with 4 interfaces, and some with 6, you should use nic1-nic4 and only plug in 4 cables on each host.
+
+==== Configuring Routes and Default Routes
+
+There are two ways that a host may have its default routes set. If the interface is using DHCP, and the DHCP server offers a gateway address, the system will install a default route for that gateway. Otherwise, a default route may be set manually on an interface with a static IP.
+
+Although the Linux kernel supports multiple default gateways, it will only use the one with the lowest metric. If there are multiple DHCP interfaces, this can result in an unpredictable default gateway. In this case, it is recommended that defroute=no be set for the interfaces other than the one where we want the default route. In this case, we want a DHCP interface (NIC 2) to be the default route (rather than the Provisioning interface), so we disable the default route on the provisioning interface:
+   
+[subs=+quotes]
+----
+    # No default route on the Provisioning network
+            -
+              type: interface
+              name: nic1
+              use_dhcp: true
+              defroute: no
+            # Instead use this DHCP infrastructure VLAN as the default route
+            -
+              type: interface
+              name: nic2
+              use_dhcp: true
+----
+
+To set a static route on an interface with a static IP, specify a route to the subnet. For instance, here is a hypothetical route to the 10.1.2.0/24 subnet via the gateway at 172.17.0.1 on the Internal API network:
+   
+
+[subs=+quotes]
+----
+ -
+                  type: vlan
+                  device: bond1
+                  vlan_id: {get_param: InternalApiNetworkVlanID}
+                  addresses:
+                  -
+                    ip_netmask: {get_param: InternalApiIpSubnet}
+              routes:
+                -
+                  ip_netmask: 10.1.2.0/24
+                  next_hop: 172.17.0.1
+----
+
+==== Using the Native VLAN for Floating IPs
+
+By default, Neutron will be expecting the floating IP network to be delivered on a tagged VLAN. This is the recommended architecture, because it allows for multiple floating IP networks and/or Provider External networks to be used at once. However, it is possible to use the native VLAN for floating IPs. If the floating IP network will use the native VLAN, then we need to tell Neutron to put the floating IPs directly on the ``br-ex`` bridge. The value must be set in both of these parameters in the parameters section:
+ 
+[subs=+quotes]
+----
+  parameters:
+    NeutronExternalNetworkBridge:
+      default: "br-ex"
+      description: Set to "''" if floating IPs on tagged VLAN, "br-ex" if on native.
+      type: string
+----
+
+The next section contains the changes to the NIC config that need to happen to put the External network on the native VLAN (the External network may be used for floating IPs in addition to the Horizon dashboard and Public APIs).
+
+==== Using the Native VLAN on a Trunked Interface
+
+If a trunked interface or bond has a network on the native VLAN, then
+the IP address will be assigned directly to the bridge and there will
+be no VLAN interface. If the native VLAN is used for the External
+network, make sure to set the _NeutronExternalNetworkBridge_ parameters
+to *"br-ex"* instead of *"''"* in the _network-environment.yaml_.
+
+For example, if the external network is on the native VLAN, the bond configuration would look like this:
+
+[subs=+quotes]
+----
+    network_config:
+              -
+                type: ovs_bridge
+                name: {get_input: bridge_name}
+                addresses:
+                  -
+                    ip_netmask: {get_param: ExternalIpSubnet}
+                routes:
+                  -
+                    ip_netmask: 0.0.0.0/0
+                    next_hop: {get_param: ExternalInterfaceDefaultRoute}
+                members:
+                  -
+                    type: ovs_bond
+                    name: bond1
+                    ovs_options: {get_param: BondInterfaceOvsOptions}
+                    members:
+                      -
+                        type: interface
+                        name: nic2
+                        primary: true
+                      -
+                        type: interface
+                        name: nic3
+----
+
+NOTE: When moving the address (and possibly route) statements onto the bridge, be sure to remove the corresponding VLAN interface from the bridge. Make sure to make the changes to all applicable roles. The External network is only on the controllers, so only the controller template needs to be changed. The Storage network on the other hand is attached to all roles, so if the storage network were the default VLAN, all roles would need to be edited.
+
+==== Configuring Jumbo Frames
+
+The Maximum Transmission Unit (MTU) setting determines the maximum amount of data that can be transmitted by a single Ethernet frame. Using a larger value can result in less overhead, since each frame adds data in the form of a header.
+
+The default value MTU 1500, and using a value higher than that will require the switch port to be configured to support jumbo frames. Most switches support an MTU of at least 9000, but many are configured for 1500 by default. The MTU of a VLAN cannot exceed the MTU of the physical interface. Make sure to include the MTU value on the bond and/or interface.
+
+Storage, Storage Management, Internal API, and Tenant networking can all benefit from jumbo frames. In testing, tenant networking throughput was over 300% greater when using jumbo frames in conjunction with VXLAN tunnels.
+
+NOTE: It is recommended that the Provisioning interface, External interface, and any floating IP interfaces be left at the default MTU of 1500. Traffic which crosses a router border will be limited to an MTU of 1500, so connectivity problems can occur if jumbo frames are used on these networks.
+   
+[subs=+quotes]
+----
+    -
+                    type: ovs_bond
+                    name: bond1
+                    mtu: 9000
+                    ovs_options: {get_param: BondInterfaceOvsOptions}
+                    members:
+                      -
+                        type: interface
+                        name: nic2
+                        mtu: 9000
+                        primary: true
+                      -
+                        type: interface
+                        name: nic3
+                        mtu: 9000
+                  -
+                    # The external interface should stay at default
+                    type: vlan
+                    device: bond1
+                    vlan_id: {get_param: ExternalNetworkVlanID}
+                    addresses:
+                      -
+                        ip_netmask: {get_param: ExternalIpSubnet}
+                    routes:
+                      -
+                        ip_netmask: 0.0.0.0/0
+                        next_hop: {get_param: ExternalInterfaceDefaultRoute}
+                  -
+                    # MTU 9000 for Internal API, Storage, and Storage MGMT
+                    type: vlan
+                    device: bond1
+                    mtu: 9000
+                    vlan_id: {get_param: InternalApiNetworkVlanID}
+                    addresses:
+                    -
+                      ip_netmask: {get_param: InternalApiIpSubnet}
+----
+
+NOTE: In order for VMs to take advantage of jumbo frames, several settings need to be made post-deployment. The Neutron and Nova options for veth_mtu and network_device_mtu respectively will need to be changed, as well as the default MTU given to VMs via DHCP. See the section in Chapter 5 titled "Configure MTU" for details of this required change.
+
+==== Making Changes to All Roles
+
+When customizing network interface templates, make sure you make changes in all the roles that will be used in the deployment. The physical interface configuration does not have to be the same for various roles, but each host within the role should have the same effective physical network configuration. For instance, some hosts may have NICs named em1 – em4, while others have NICs named eno1 – eno4, but all hosts may be configured using nic1 – nic4.
+
+=== Deploying the Overcloud with Network Isolation
+
+When deploying with network isolation, you should specify the NTP server for the overcloud nodes. If the clocks are not synchronized, some OpenStack services may be unable to start, especially when using HA. The NTP server should be reachable from both the External and Provisioning subnets. The neutron network type should be specified, along with the tunneling or VLAN parameters.
+
+To deploy with network isolation and include the network environment
+file, use the *-e* parameters with the openstack overcloud deploy command. For instance, to deploy VXLAN mode, the deployment command might be:
+
+[subs=+quotes]
+----
+ $ *openstack overcloud deploy \
+ -e /usr/share/openstack-tripleo-heat-templates/environments/network-isolation.yaml \
+ -e /home/stack/network-environment.yaml \
+ --templates --ntp-server pool.ntp.org --neutron-network-type vxlan \
+ --neutron-tunnel-types vxlan*
+----
+
+To deploy with VLAN mode, you should specify the range of VLANs that will be used for tenant networks:
+
+[subs=+quotes]
+----
+  $ *openstack overcloud deploy \
+ -e /usr/share/openstack-tripleo-heat-templates/environments/network-isolation.yaml \
+ -e /home/stack/network-environment.yaml \
+ --templates --ntp-server pool.ntp.org --neutron-network-type vlan \
+ --neutron-bridge-mappings datacentre:br-ex \
+ --neutron-network-vlan-ranges datacentre:30:100*
+----
+
+If the tenant network VLANs will be on a different bridge (not br-ex),
+then the tenant bridge must be included in the bridge mappings and
+VLAN ranges. For example, if the tenant VLAN bridge is named
+_br-tenant_:
+
+[subs=+quotes]
+----
+  $ *openstack overcloud deploy \
+ -e /usr/share/openstack-tripleo-heat-templates/environments/network-isolation.yaml \
+ -e /home/stack/network-environment.yaml \
+ --templates --ntp-server pool.ntp.org --neutron-network-type vlan \
+ --neutron-bridge-mappings datacentre:br-ex,tenantvlan:br-tenant \
+ --neutron-network-vlan-ranges tenantvlan:30:100*
+----

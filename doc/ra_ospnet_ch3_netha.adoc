@@ -1,0 +1,185 @@
+[chapter 3]
+== Network High Availability
+
+This section presents several techniques used for network high
+availability and resiliency. These methods may be combined in order to
+provide a robust, high performance network that can withstand
+independent component failures.
+
+=== Leaf and Spine Network Topology
+
+Leaf-and-spine topology is a general architecture for Ethernet
+switching where each cluster of servers is attached to one or more
+“leaf” switches, and each leaf switch is attached to one or more
+“spine” switches. All traffic between leaf switches, as well as
+external traffic, is sent through the spine. Traffic between leaf
+switches has at most one hop through the spine. This is the most
+efficient way to connect multiple racks of servers, since it would
+require interconnects between each and every top-of-rack switch if
+there were no spine.
+
+[[image-leaf-and-spine]]
+.image-leaf-and-spine
+image::images/ra_ospnet_4.png[caption="Figure 3.1: " title="Leaf and Spine Topology with Shared L2 VLANs" align="center"]
+
+=== Using Spanning Tree Protocol For Redundant Connectivity
+
+Spanning Tree Protocol (STP) allows Ethernet devices to attach to a
+switching fabric that has physical loops. STP will prevent traffic
+from looping (repeating in a loop endlessly), by logically blocking
+traffic from one or more links. This allows the construction of a
+physically redundant topology.
+
+[[image-stp]]
+.image-stp
+image::images/ra_ospnet_5.png[caption="Figure 3.2: " title="Spanning Tree Protocol Between Three Switches" align="center"]
+
+In the example above, the leaf switch is attached to two spine
+switches. Spine switch A has a lower bridge-priority configured, so it
+is designated as the STP root bridge. The leaf switch will forward
+traffic to spine switch A and block traffic to spine switch B.
+Similarly, spine switch B will forward traffic to spine switch A and
+block traffic to the leaf switch.
+
+If a failure occurs on spine switch A, or the link between spine
+switch A and the leaf switch is severed, traffic will automatically be
+forwarded to and from spine switch B.
+
+STP provides redundancy, but it does not provide load sharing. In this
+case, only one of the two links from the leaf switch will be active at
+any time. In order to utilize both links simultaneously, other methods
+are used, see the next four sections.
+
+=== Bonded Ethernet Links
+
+Ethernet bonding, also known as link aggregation (LAG) or adapter
+teaming, allows multiple physical links to be combined into a single
+virtual link. Several variants of bonding exist, depending on
+equipment vendor and chosen protocol, but all variants provide similar
+functionality. The links are utilized to provide additional aggregate
+bandwidth, redundancy, and a simpler configuration since the entire
+bond is configured as a single link.
+Some modes of bonding require switch support and configuration.
+
+While bonding provides higher aggregate throughput, a single TCP/UDP
+flow may be restricted to using a single link in the bond. If you bond
+together four 10Gb links, this means that four TCP streams can all
+transfer simultaneously at 10Gb/s, but a single TCP stream will not
+reach 40Gb/s throughput.
+
+There are two places where bonding is useful in an OpenStack
+deployment: the links between Ethernet switches, and the links between
+Ethernet switches and hosts.
+
+Bonding support in OSP 7 is provided by Open vSwitch. Here are the
+bonding methods supported by OVS:
+
+[glossary]
+*active-backup*::
+  This mode provides fault-tolerance in the event that a link or switch
+  goes down. This mode does not require any special switch support or
+  configuration, and works when the links are connected to separate
+  switches. This mode does not provide load balancing.
+*balance-slb*::
+  This mode uses a simple hashing algorithm based on source MAC address
+  and VLAN number, with periodic rebalancing as traffic patterns change.
+  This mode is similar to "mode 2" bonds used by the Linux bonding
+  driver. This mode is used when the switch is configured with bonding
+  but is not configured to use LACP ("static" instead of "dynamic"
+  bonds).
+*balance-tcp*::
+  This mode will balance the load based on layer 2 through layer 4 data
+  such as destination MAC address, IP address, and TCP port. This mode
+  requires that LACP be configured on the switch. This mode is similar
+  to "mode 4" bonds used by the Linux bonding driver. This mode is
+  recommended when possible, because LACP provides the most resiliency
+  for detecting link failures and provides additional diagnostic
+  information about the bond.
+
+=== High Availability Chassis Network Equipment
+
+High-availability Ethernet switch chassis allow multiple interface
+cards and multiple controller module cards to be installed into the
+same chassis. Ethernet bonds may be spread over multiple cards for
+redundancy, and multiple controller modules may provide resiliency for
+controller failure or during upgrades, where individual controller
+cards are upgraded while another controller card handles switch
+traffic.
+
+Chassis-based Ethernet switches provide the highest potential
+availability (99.999% uptime or above in some cases), the cost
+per-port is much higher than integrated devices. Chassis-based
+switches also provide a higher maximum port density, with some larger
+units providing hundreds of ports spread across multiple cards. In
+large deployments, chassis-based switches provides enough ports for a
+spine with many leaf nodes. It is also common for Enterprises to use
+chassis-based switches in the datacenter.
+
+=== Ethernet Switch Stacking And Clustering
+
+Ethernet switch stacking or clustering provides both port density and
+resiliency by combining multiple integrated switches into a single
+logical switch. When combined with Ethernet Bonding, this allows a
+leaf switch to be connected to two spine switches and utilize both
+links simultaneously. This removes the limitation of Spanning Tree,
+where half of the uplinks would be put into standby mode. Stacking and
+clustering are vendor-specific, so typically all stacked or clustered
+switches will be the same make and similar model.
+
+Stacking is achieved through the use of special stacking cables. These
+are high-bandwidth cables (often proprietary) that connect two or more
+switches together via a shared backplane. Depending on the vendor, the
+devices may be configured individually, or the configuration may be
+done on a master switch which manages the configuration of the slave
+switch or switches.
+
+Clustering is achieved via direct high-speed Ethernet connections
+between the switches. Typically each switch in a cluster is configured
+separately, but some vendors also provide centralized configuration
+for the entire cluster.
+
+Most stacking and clustering solutions allow an Ethernet bond to be
+spread out over multiple switches. This technology is often referred
+to as Multi-chassis Link Aggregation (MLAG), but certain vendors have
+alternate terms. The advantage of using MLAG is that all members of a
+bond can be active, whereas STP puts half of the uplinks into passive
+standby. When a bond is split between switches, all switches must
+support the same VLANs on the bond.
+Stacking or clustering can be done at the top-of-rack switches,
+allowing each OpenStack node to split an Ethernet bond between two
+top-of-rack switches. This allows rolling upgrades of Ethernet
+switches without losing connectivity to the host, and protects against
+losing connectivity in case of a single switch failure. Stacking or
+clustering is also useful in the spine, allowing the leaf nodes to
+utilize all uplinks to the spine simultaneously.
+
+=== Multi-Path Networking
+
+Multi-path networking involves using multiple paths for network
+traffic, usually by routing data at the IP layer. Multiple network
+paths provide redundancy. When a network device has more than one
+route to a destination, it will evaluate several factors to choose a
+route, including bandwidth and routing metrics to determine the
+“cost”. If the cost is the same, then most devices will use Equal-Cost
+Multi-Path (ECMP) to load-balance the links.
+
+[[image-multi]]
+.image-multi
+image::images/ra_ospnet_6.png[caption="Figure 3.3: " title="Multi-path Networking" align="center"]
+
+When configuring devices such as firewalls and load balancers, it is
+often preferable to connect them to the switches using a layer 3
+routed IP link. This allows multiple layer 3 links to multiple
+switches to be utilized simultaneously, without spanning-tree protocol
+blocking one of the links to avoid loops. This technique can be
+achieved with either static routes on both sides of each link, or by
+using a dynamic routing protocol such as OSPF or BGP to manage
+exchanging routing information.
+
+Depending on vendor and configuration, the load sharing algorithm may
+use source and destination IP addresses, port numbers, protocols, or
+other variables to add entropy and utilize all available links. For
+example, a simple load sharing algorithm using IP and source port
+might calculate '((source IP + destination IP + source port) modulo
+number_of_paths)' and assign a connection to route A or B depending on
+the result.
