@@ -122,7 +122,7 @@ _parameter_defaults_ section needs to be customized for the local environment.
   StorageAllocationPools: [{'start': '172.18.0.10', 'end': '172.18.0.200'}]
   StorageMgmtAllocationPools: [{'start': '172.19.0.10', 'end': '172.19.0.200'}]
   TenantAllocationPools: [{'start': '172.16.0.10', 'end': '172.16.0.200'}]
-  # Leave room if the external network will also be used for floating IPs
+  # Leave room if the external network are also used for floating IPs
   ExternalAllocationPools: [{'start': '10.0.0.10', 'end': '10.0.0.50'}]
   # Gateway router for the external network
   ExternalInterfaceDefaultRoute: 10.0.0.1
@@ -240,8 +240,8 @@ It is recommended to deploy a Tenant VLAN (which is used for tunneling GRE and/o
 even if Neutron VLAN mode is chosen and tunneling is disabled at
  deployment time. This requires the least customization at deployment time,
  and leaves the option available to use tunnel networks as utility networks,
- or for network function virtualization in the future. Tenant networks will
-still be created using VLANs, but the operator can create VXLAN tunnels for
+ or for network function virtualization in the future. Tenant
+ networks are still created using VLANs, but the operator can create VXLAN tunnels for
 special use networks without consuming tenant VLANs. It is possible to add
 VXLAN capability to a network with a Tenant VLAN, but it is not possible to
 add a Tenant VLAN to an already deployed set of hosts.
@@ -269,9 +269,9 @@ If the switches do not support LACP, then do not configure a bond on the upstrea
  "bond_mode=balance-slb lacp=off"
 ----
 
-OVS will balance traffic based on source MAC address and destination
- VLAN. The switch will only see a given MAC address on one link in the
-bond at a time, and OVS will use special filtering to prevent packet
+OVS balances traffic based on source MAC address and destination
+ VLAN. The switch only sees a given MAC address on one link in the
+bond at a time, and OVS uses special filtering to prevent packet
 duplication across the links.
 
 In addition, the following options may be added to the options string to tune the bond:
@@ -291,7 +291,7 @@ In addition, the following options may be added to the options string to tune th
  "other_config:bond_updelay=1000"
 ----
 
-If bonding is not used, these options will be ignored.
+If bonding is not used, these options are ignored.
 
 === Optional: Modify the Service to Network Mapping
 
@@ -774,7 +774,7 @@ uses the one with the lowest metric. If there are multiple DHCP interfaces, this
               use_dhcp: true
 ----
 
-By default, {ro} director 7.1 will use static IP addressing on all interfaces. To set a static route on an interface with a static IP, specify a route to the subnet. For instance, here is a hypothetical route to the 10.1.2.0/24 subnet via the gateway at 172.17.0.1 on the Internal API network:
+By default, {ro} director 7.1 uses static IP addressing on all interfaces. To set a static route on an interface with a static IP, specify a route to the subnet. For instance, here is a hypothetical route to the 10.1.2.0/24 subnet via the gateway at 172.17.0.1 on the Internal API network:
 
 [subs=+quotes]
 ----
@@ -793,15 +793,21 @@ By default, {ro} director 7.1 will use static IP addressing on all interfaces. T
 
 ==== Using the Native VLAN for Floating IPs
 
-{ro} 7 will configure Neutron with an empty string for the Neutron external bridge mapping. This results in the physical interface being patched to br-int,rather than using br-ex directly (as in previous versions). This model allows for multiple floating IP networks, using either VLANs or multiple physical connections.
+{ro} 7 configures Neutron with an empty string for the Neutron external bridge mapping. This results in the physical interface being patched to br-int,rather than using br-ex directly (as in previous versions). This model allows for multiple floating IP networks, using either VLANs or multiple physical connections.
 
+[subs=+quotes]
+----
   parameter_defaults:
     NeutronExternalNetworkBridge: "''"
+----
 
 When using only one floating IP network on the native VLAN of a bridge, then you can optionally set the Neutron external bridge to e.g. "br-ex". This results in the packets only having to traverse one bridge (instead of two), and may result in slightly lower CPU when passing traffic over the floating IP network.
 
+[subs=+quotes]
+----
   parameter_defaults:
     NeutronExternalNetworkBridge: "'br-ex'"
+----
 
 The next section contains the changes to the NIC config that need to happen to put the External network on the native VLAN (the External network may be used for floating IPs in addition to the Horizon dashboard and Public APIs).
 
@@ -907,10 +913,16 @@ for _veth_mtu_ and _network_device_mtu_ respectively need to be changed, as well
 When customizing network interface templates, make sure you make changes in all the roles used in the deployment. The physical interface configuration does not have to be the same for various roles, but each host within the role should have the same effective physical network configuration. For instance, some hosts may have NICs named em1 – em4, while others have NICs named eno1 – eno4, but all hosts may be configured using nic1 – nic4.
 
 ==== Changes to Network Configuration in OSP-D 7.1
-The 7.1 version of {ro} director supports static IPs on the Provisioning network. These changes require additional parameters for setting static IPs, routes, and DNS servers. If you are reusing templates from an {rpo} 7.0 deployment, you will have to modify the templates to be compatible with version 7.1.
+The 7.1 version of {ro} director supports static IPs on the
+Provisioning network. These changes require additional parameters for
+setting static IPs, routes, and DNS servers. If you are reusing
+templates from an {rpo} 7.0 deployment, you must modify the templates
+to be compatible with version 7.1.
 
 When using static Provisioning IPs, the network environment file now needs to contain additional resource defaults (customize to match the environment):
 
+[subs=+quotes]
+----
  parameter_defaults:
   # Gateway router for the provisioning network (or Undercloud IP)
   ControlPlaneDefaultRoute:10.8.146.254
@@ -918,9 +930,15 @@ When using static Provisioning IPs, the network environment file now needs to co
   EC2MetadataIp: 10.8.146.1
   # Define the DNS servers (maximum 2) for the overcloud nodes
   DnsServers:['8.8.8.8','8.8.4.4']
+----
 
-The NIC templates for each role will have to be modified as well. First, additional parameters need to be added to the top section of the NIC config templates. Whether the provisioning interface will use DHCP or static IPs, these need to be added in any case:
+The NIC templates for each role must be modified as well. First,
+additional parameters need to be added to the top section of the NIC
+config templates. Whether the provisioning interface uses DHCP or
+static IPs, these must be added in any case:
 
+[subs=+quotes]
+----
  parameters:
   ControlPlaneIp:
     default: ''
@@ -937,9 +955,15 @@ The NIC templates for each role will have to be modified as well. First, additio
   EC2MetadataIp: # Override this via parameter_defaults
     description: The IP address of the EC2 metadata server.
     type: string
+----
 
-If the provisioning interface will use static IPs, then those parameters need to be used in the NIC config portion of the templates. Here is an example of the changes required for the controller role (in bold):
+If the provisioning interface usess static IPs, then those parameters
+must be used in the NIC config portion of the templates.
 
+Here is an example of the changes required for the controller role (in bold):
+
+[subs=+quotes]
+----
           network_config:
             -
               type: interface
@@ -984,9 +1008,12 @@ If the provisioning interface will use static IPs, then those parameters need to
                     -
                       ip_netmask: 0.0.0.0/0
                       next_hop: {get_param: ExternalInterfaceDefaultRoute}
+----
 
 Here are the changes required for the compute and storage roles:
 
+[subs=+quotes]
+----
           network_config:
             -
               type: interface
@@ -1007,6 +1034,7 @@ Here are the changes required for the compute and storage roles:
                 -
                   default: true
                   next_hop: {get_param: ControlPlaneDefaultRoute}
+----
 
 === Deploying the Overcloud with Network Isolation
 
