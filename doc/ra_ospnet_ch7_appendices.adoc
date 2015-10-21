@@ -13,7 +13,7 @@
 
 |Revision 1.1.1|Monday, October 5, 2015|Dan Sneddon
 3+|
--Corrections to sections on configuring ServiceNetMap
+- Corrections to sections on configuring ServiceNetMap
 
 |Revision 1.1.0|Thursday, October 2, 2015|Dan Sneddon
 3+|
