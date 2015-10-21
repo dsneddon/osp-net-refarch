@@ -25,3 +25,5 @@ network and deploying OpenStack. The fifth section describes the
 OpenStack Neutron configuration of tenant network segregation,
 including overlay networks. The sixth section includes some common
 troubleshooting techniques for Neutron networks.
+
+This document has been updated for {ro} 7.0.1 and {ro} director 7.1.

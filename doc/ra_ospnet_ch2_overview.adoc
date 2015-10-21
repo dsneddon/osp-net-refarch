@@ -4,7 +4,7 @@
 This section describes the software and hardware components used to
 develop this reference architecture.
 
-=== OpenStack Platform
+=== {osp}
 
 {osp} provides the foundation to build private or public
 Infrastructure-as-a-Service (IaaS) for
@@ -103,18 +103,18 @@ deploy the Overcloud nodes. The instance of Heat running on the
 Undercloud also uses the Provisioning network for orchestrating the
 Overcloud. The Undercloud is attached to this network with the
 interface that is running PXE services. Generally the first network
-interface is used on the Overcloud nodes, since the system will PXE
-boot from the first interface by default.
+interface is used on the Overcloud nodes, since the system PXE
+boots from the first interface by default.
 
 The Undercloud also requires an uplink with Internet access that is
 separate from the interface used to serve DHCP and PXE services. It
 may share the External VLAN used for the Horizon dashboard and Public
-APIs, which will be how the Undercloud contacts the Overcloud APIs.
+APIs, which is how the Undercloud contacts the Overcloud APIs.
 
 ===== Overcloud Networks
 
 The Overcloud networks are connected to the servers that are part of
-the Overcloud. They provides: control traffic between the HA
+the Overcloud. They provide: control traffic between the HA
 controllers and the compute and storage nodes; connectivity for tenant
 VM traffic; object and block storage traffic; and external
 connectivity with floating IPs. In the reference architecture each of
@@ -161,7 +161,7 @@ protocol has no concept of security, and the server may be a security
 risk if left exposed. This network should be isolated or otherwise
 secured in production deployments.
 
-When servers are provisioned, Puppet will run to configure the
+When servers are provisioned, Puppet configures the
 OpenStack services. All nodes must be connected to the Provisioning
 network via the network interface from which they boot. This is
 usually the first network interface, often referred to as eth0, but it
@@ -185,7 +185,7 @@ prevents mixing control traffic and data traffic in the same network.
   orchestration of the Overcloud. In a minimal or proof-of-concept
   deployment, it is possible to run all traffic over a single flat
   network, but this mode is not recommended for production. The
-  Provisioning network will be used by the Compute and Storage nodes to
+  Provisioning network is used by the Compute and Storage nodes to
   access NTP, DNS, and system updates. The Undercloud may be used as a
   default gateway, but a router gateway on the Provisioning network is
   recommended for resilience and scalability (so the traffic is not
@@ -196,19 +196,19 @@ prevents mixing control traffic and data traffic in the same network.
   database. The Glance Registry API uses this network, as does the
   Cinder API. This network is typically only reachable from inside the
   OpenStack Overcloud environment, so API calls from outside the cloud
-  will use the Public APIs.
+  use the Public APIs.
 *Tenant Network*::
   This network is used for connectivity for VMs. A
   single network VLAN is used when Neutron is using VXLAN or GRE
   tunneling mode. When using VLAN mode, however, a range of VLANs must
   be set aside for tenant networks. These VLANs should not be in use for
-  any other purpose. Neutron will assign the VLANs to a VM based on
+  any other purpose. Neutron assigns the VLANs to a VM based on
   which tenant networks are assigned to the VM.
 *Storage Network*::
   This network hosts the data traffic for object and
   block storage. Cinder iSCSI connections are made on the Storage
   network. The Swift API and Glance API utilize this network, since
-  those APIs transfer storage data. It is recommended that that the
+  those APIs transfer storage data. It is recommended that the
   interface used on the Storage network be 10Gb Ethernet or faster if
   possible. If this network is attached to a bond shared with other
   networks, there must be sufficient bandwidth available. It is common
@@ -220,7 +220,7 @@ prevents mixing control traffic and data traffic in the same network.
 *Storage Management Network*::
   This network is used for back-end storage
   operations. Swift uses this network to perform replication between
-  storage nodes, and the Swift Proxy on the controllers will use this
+  storage nodes, and the Swift Proxy on the controllers uses this
   network to access the raw storage on dedicated Swift storage nodes.
   Ceph uses this network for clustering.
 *External Network*::
@@ -233,21 +233,15 @@ prevents mixing control traffic and data traffic in the same network.
 
 ==== Network VLAN Requirements
 The networks used are on separate VLANs. In a typical OpenStack
-installation, the number of networks will exceed the number of
+installation, the number of networks exceeds the number of
 physical network links, especially when using Ethernet bonds. In order
 to connect all the networks to the proper hosts, VLAN tagging is used
 to deliver more than one network per interface. Most of the networks
-are isolated subnets, but some will require a Layer 3 gateway to
+are isolated subnets, but some require a Layer 3 gateway to
 provide routing for Internet or infrastructure network connectivity.
 Some networks can be delivered over tagged VLANs, but certain network
 types have restrictions or must be delivered over dedicated
 interfaces.
-
-When using HA controllers, over 30 addresses are used for HA virtual
-IPs (VIPs). These addresses are spread between the Cluster Management,
-Internal API, and Public API subnets. If any of these subnets are
-combined, a minimum subnet size of /26 (62 usable IP addresses) is
-required for the resulting subnet.
 
 Internet access (or access to external networks) is required for the
 Tenant External networks in order to provide external connectivity for
@@ -270,7 +264,7 @@ VMs.
 
 [[image-network-type]]
 .image-network-type
-image::images/ra_ospnet_3.png[caption="Figure 2.3: " title="RHEL-OSP Networks by Node Type" align="center"]
+image::images/ra_ospnet_3.png[caption="Figure 2.3: " title="{ro} Networks by Node Type" align="center"]
 
 The following network traffic types are used in {osp}:
 
@@ -319,15 +313,15 @@ Neutron supports a variety of networking modes using plugins. The
 modes covered in this document are supported by the Neutron
 Modular Layer 2 (ML2) plugin, which has a variety of drivers to
 support different networking models. At a high level, these
-modes are VLAN, GRE, and VXLAN, which are described in detail in
-section 2.3.3 (“Neutron ML2 Plugin Type Drivers”).
+modes are VLAN, GRE, and VXLAN, which are described in detail in the
+<<neutron-ml2-plugin-type-drivers>> section.
 
 ==== High Availability Network Methodologies Overview
 
 Some high availability methodologies can be added to an existing
 deployment, but some need to be designed into the network from
 the beginning. High availability methodologies are covered
-further in Section 3.
+further in the <<network_high_availability>> chapter.
 
 These methodologies are infrastructure-oriented, and must be
 included in the initial design:
@@ -406,7 +400,7 @@ selected plugin. Each plugin has a component that runs on the
 Network nodes (non HA) or Controller nodes (HA), and some
 plugins have a plugin-agent that runs on each compute node. The
 plugin that runs on each compute node manages the local virtual
-switch (vswitch) configuration. The plug-in that you use with
+switch (vswitch) configuration. The plug-in that is used with
 Neutron server determines which plugin agents run on each
 compute node. For example, a common configuration is the ML2
 plugin plus the neutron_ovs_agent for L2 communication on the
@@ -415,7 +409,7 @@ Compute host.
 ===== Neutron Plugins Included in main Neutron Distribution
 
 Several plugins are included in the Neutron distribution, and
-are included in the OpenStack Neutron packages for RHEL OSP.
+are included in the OpenStack Neutron packages for {ro}.
 Additionally, vendor-specific plugins and drivers are provided
 by manufacturers of certain network hardware. A full list of the
 certified plugins and drivers is available at
@@ -459,6 +453,7 @@ whether vendor-specific functionality is desired.  A full list
 of the certified plugins and drivers is available at
 https://access.redhat.com/certifications.
 
+[[neutron-ml2-plugin-type-drivers]]
 ====  Neutron ML2 Plugin Type Drivers
 
 This section describes the type drivers that are available in
@@ -467,7 +462,7 @@ network architecture which has been selected for the Overcloud.
 
 ===== Flat
 
-The flat type driver is used when all nodes will share a single
+The flat type driver is used when all nodes share a single
 or multiple flat networks, with no VLAN separation or tunnels
 used to abstract the network or provide network separation. This
 type of network is most commonly used when an OpenStack
@@ -492,7 +487,7 @@ or more virtual networks could use the 192.168.0.0/24 subnet.
 Within the range of VLANs assigned to Neutron, all management of
 the VLANs is handled by Neutron. For this reason, the entire
 range of VLANs must be trunked to each compute host. Neutron
-will instruct the mechanism driver on the Compute host to
+instructs the mechanism driver on the Compute host to
 automatically attach the appropriate VLANs to the virtual ports
 assigned to each VM on the host.
 
@@ -526,7 +521,7 @@ encapsulate and decapsulate traffic, so the traffic sent and
 received by VMs is unaffected by the GRE tunnel.
 
 NOTE: Red Hat recommends the OVS mechanism driver in conjunction with
-the VXLAN type driver. It is also possible to use the Linux
+the GRE type driver. It is also possible to use the Linux
 Bridge in place of OVS for connectivity inside the hypervisor.
 This may be preferable in certain circumstances, such as when
 using SR-IOV.
@@ -560,7 +555,8 @@ perspective, it is sharing a layer 2 segment with the other VMs
 on the virtual network. VXLAN endpoints encapsulate and
 decapsulate traffic, so the traffic sent and received by VMs is
 unaffected by the VXLAN encapsulation.
-Red Hat recommends the OVS mechanism driver in conjunction with
+
+NOTE: Red Hat recommends the OVS mechanism driver in conjunction with
 the VXLAN type driver.  It is also possible to use Linux Bridge
 in the place of OVS for connectivity inside the hypervisor. This
 may be preferable in certain circumstances, such as when using
@@ -575,6 +571,7 @@ assigning it to a tenant network allows the VMs in that network
 to communicate with other tenant networks (also known as
 East-West routing) or upstream if an external gateway is defined
 for the router (also known as North-South routing).
+
 When a router is created in Neutron, it is assigned to a Neutron
 network. The router is not started until the first VM in that
 network is created.
@@ -582,7 +579,7 @@ network is created.
 === Neutron High Availability
 
 Pacemaker is used to create a cluster of 3 or more controllers.
-Each cluster will support the same bridges, tenant networks, and
+Each cluster supports the same bridges, tenant networks, and
 Neutron agents. It is possible to configure multiple HA clusters
 for load sharing. Each cluster would maintain a different set of
 networks and agents.
@@ -596,7 +593,7 @@ allows multiple DHCP servers per network.
 - The *L3 Agent* uses iptables to implement NAT for the tenant
 networks. External clustering can create an active/standby
 controller pair, and IP addresses are failed over. When a
-failover occurs, the existing TCP connections will be reset.
+failover occurs, the existing TCP connections reset.
 - The *Metadata agent* can be run on all network controllers, making
 it highly available and scalable with multiple HA network
 controllers.
@@ -605,14 +602,14 @@ controllers.
 
 The OVS bridges are created when the Neutron software is
 installed and configured on each Network controller. When
-Neutron routers are created, they will be attached to the
+Neutron routers are created, they are attached to the
 bridges using OVS tap interfaces.
 
 ==== L3 Agent High Availability
 
 L3 agents handle persistent TCP streams, so it isn't possible to
 run multiple L3 agents in the same way as running multiple DHCP
-agents. L3 agents running on multiple controllers will have the
+agents. L3 agents running on multiple controllers have the
 same networks and routers, but traffic is routed through a
 virtual IP address which the controllers share. If one
-controller fails, another will take over the virtual IP.
+controller fails, another takes over the virtual IP.

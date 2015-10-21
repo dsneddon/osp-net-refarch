@@ -1,4 +1,5 @@
 [chapter 3]
+[[network_high_availability]]
 == Network High Availability
 
 This section presents several techniques used for network high
@@ -25,7 +26,7 @@ image::images/ra_ospnet_4.png[caption="Figure 3.1: " title="Leaf and Spine Topol
 === Using Spanning Tree Protocol For Redundant Connectivity
 
 Spanning Tree Protocol (STP) allows Ethernet devices to attach to a
-switching fabric that has physical loops. STP will prevent traffic
+switching fabric that has physical loops. STP prevents traffic
 from looping (repeating in a loop endlessly), by logically blocking
 traffic from one or more links. This allows the construction of a
 physically redundant topology.
@@ -36,17 +37,17 @@ image::images/ra_ospnet_5.png[caption="Figure 3.2: " title="Spanning Tree Protoc
 
 In the example above, the leaf switch is attached to two spine
 switches. Spine switch A has a lower bridge-priority configured, so it
-is designated as the STP root bridge. The leaf switch will forward
-traffic to spine switch A and block traffic to spine switch B.
-Similarly, spine switch B will forward traffic to spine switch A and
-block traffic to the leaf switch.
+is designated as the STP root bridge. The leaf switch forwards
+traffic to spine switch A and blocks traffic to spine switch B.
+Similarly, spine switch B forwards traffic to spine switch A and
+blocks traffic to the leaf switch.
 
 If a failure occurs on spine switch A, or the link between spine
-switch A and the leaf switch is severed, traffic will automatically be
+switch A and the leaf switch is severed, traffic is automatically
 forwarded to and from spine switch B.
 
 STP provides redundancy, but it does not provide load sharing. In this
-case, only one of the two links from the leaf switch will be active at
+case, only one of the two links from the leaf switch is active at
 any time. In order to utilize both links simultaneously, other methods
 are used, see the next four sections.
 
@@ -64,7 +65,7 @@ Some modes of bonding require switch support and configuration.
 While bonding provides higher aggregate throughput, a single TCP/UDP
 flow may be restricted to using a single link in the bond. If you bond
 together four 10Gb links, this means that four TCP streams can all
-transfer simultaneously at 10Gb/s, but a single TCP stream will not
+transfer simultaneously at 10Gb/s, but a single TCP stream cannot
 reach 40Gb/s throughput.
 
 There are two places where bonding is useful in an OpenStack
@@ -88,7 +89,7 @@ bonding methods supported by OVS:
   but is not configured to use LACP ("static" instead of "dynamic"
   bonds).
 *balance-tcp*::
-  This mode will balance the load based on layer 2 through layer 4 data
+  This mode balances the load based on layer 2 through layer 4 data
   such as destination MAC address, IP address, and TCP port. This mode
   requires that LACP be configured on the switch. This mode is similar
   to "mode 4" bonds used by the Linux bonding driver. This mode is
@@ -124,7 +125,7 @@ leaf switch to be connected to two spine switches and utilize both
 links simultaneously. This removes the limitation of Spanning Tree,
 where half of the uplinks would be put into standby mode. Stacking and
 clustering are vendor-specific, so typically all stacked or clustered
-switches will be the same make and similar model.
+switches are the same make and similar model.
 
 Stacking is achieved through the use of special stacking cables. These
 are high-bandwidth cables (often proprietary) that connect two or more
@@ -145,6 +146,7 @@ alternate terms. The advantage of using MLAG is that all members of a
 bond can be active, whereas STP puts half of the uplinks into passive
 standby. When a bond is split between switches, all switches must
 support the same VLANs on the bond.
+
 Stacking or clustering can be done at the top-of-rack switches,
 allowing each OpenStack node to split an Ethernet bond between two
 top-of-rack switches. This allows rolling upgrades of Ethernet
@@ -158,9 +160,9 @@ utilize all uplinks to the spine simultaneously.
 Multi-path networking involves using multiple paths for network
 traffic, usually by routing data at the IP layer. Multiple network
 paths provide redundancy. When a network device has more than one
-route to a destination, it will evaluate several factors to choose a
+route to a destination, it evaluates several factors to choose a
 route, including bandwidth and routing metrics to determine the
-“cost”. If the cost is the same, then most devices will use Equal-Cost
+“cost”. If the cost is the same, then most devices use Equal-Cost
 Multi-Path (ECMP) to load-balance the links.
 
 [[image-multi]]
@@ -180,6 +182,6 @@ Depending on vendor and configuration, the load sharing algorithm may
 use source and destination IP addresses, port numbers, protocols, or
 other variables to add entropy and utilize all available links. For
 example, a simple load sharing algorithm using IP and source port
-might calculate '((source IP + destination IP + source port) modulo
-number_of_paths)' and assign a connection to route A or B depending on
+might calculate *((source IP + destination IP + source port) modulo
+number_of_paths)* and assign a connection to route A or B depending on
 the result.
