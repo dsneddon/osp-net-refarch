@@ -1,6 +1,6 @@
-= High Availability Network Architecture: with Red Hat Enterprise Linux OpenStack Platform 7
+= High Availability Network Architecture: with Red Hat Enterprise Linux OpenStack Platform 7 Updated for OSP-Director 7.1
 Dan Sneddon <dnseddon@redhat.com>
-v1.0, October 13, 2015
+v1.3, October 20, 2015
 :description: Reference architecture
 :doctype: book
 :title-logo-image: image:images/rh-ra-banner.jpg[scaledwidth=70%,align=center]

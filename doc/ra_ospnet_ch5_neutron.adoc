@@ -3,7 +3,7 @@
 
 === Configure Neutron Networks
 
-Before launching any virtual machines, it is necessary to configure the virtual infrastructure, including networks that the VMs will use. This section describes the configuration of Neutron networks for the OpenStack deployment.
+Before launching any virtual machines, it is necessary to configure the virtual infrastructure, including networks that the VMs use. This section describes the configuration of Neutron networks for the OpenStack deployment.
 
 ==== Create Tenant Networks and Subnets
 
@@ -29,7 +29,11 @@ External networks must be created to enable access outside the cloud. This is us
  --provider:segmentation_id 104*
 ----
 
-NOTE: It is recommended that the Floating IP networks be implemented as VLANs as in the above command, because this allows for multiple Floating IP networks and/or multiple Provider External networks. If, however, the native VLAN is used on a link to provide floating IPs, then the following command will create the floating IP network directly on the bridge with no VLAN ID:
+NOTE: It is recommended that the Floating IP networks be implemented
+as VLANs as in the above command, because this allows for multiple
+Floating IP networks and/or multiple Provider External networks. If,
+however, the native VLAN is used on a link to provide floating IPs,
+then the following command creates the floating IP network directly on the bridge with no VLAN ID:
 
 [subs=+quotes]
 ----
@@ -38,7 +42,8 @@ NOTE: It is recommended that the Floating IP networks be implemented as VLANs as
  --provider:network_type flat*
 ----
 
-Next a subnet will have to be created for the network, and a range of IPs that will be used for Floating IPs will be assigned:
+Next a subnet must be created for the network, and a range of IPs
+for Floating IPs are  assigned:
 
 [subs=+quotes]
 ----
@@ -49,9 +54,12 @@ Next a subnet will have to be created for the network, and a range of IPs that w
  ext-net 10.8.148.0/24*
 ----
 
-A subnet can be added to the network in Horizon by selecting More > Add Subnet for the network in the Networks tab. The external gateway must be specified. In the Subnet Detail, Enable DHCP must be disabled for External networks.
+A subnet can be added to the network in Horizon by selecting *More* >
+*Add Subnet* for the network in the *Networks* tab. The external
+gateway must be specified. In the *Subnet Detail*, *Enable DHCP* must be disabled for External networks.
 
-Next we will create a default network for tenant VMs. This network will be internal to the Overcloud, and external access will be through a floating IP.
+Next we create a default network for tenant VMs. This network is
+internal to the Overcloud, and external access is through a floating IP.
 
 [subs=+quotes]
 ----
@@ -65,7 +73,9 @@ Nova instances can then be created and attached to the default-net network. Opti
 
 ==== Gateways and L3 Agents
 
-Neutron routers perform the task of forwarding traffic between networks. A router can be attached to multiple tenant networks, and will route traffic between them. A router can also be attached to one or more external networks, permitting outbound SNAT for VMs, or allowing floating IPs on the external network to be assigned to VMs on the tenant networks that the router is attached to. When interfaces are created on the router, ports are attached to the neutron-l3-agent process on the Network Controller(s).
+Neutron routers perform the task of forwarding traffic between
+networks. A router can be attached to multiple tenant networks, and
+routes traffic between them. A router can also be attached to one or more external networks, permitting outbound SNAT for VMs, or allowing floating IPs on the external network to be assigned to VMs on the tenant networks that the router is attached to. When interfaces are created on the router, ports are attached to the neutron-l3-agent process on the Network Controller(s).
 
 When a router is created in Neutron, initially it is not connected to any networks. The router needs to be attached to the networks by creating interfaces, either in Horizon or on the command line.
 
@@ -111,13 +121,22 @@ To use a different IP (other than the first IP in the network), first create a p
 
 ==== Configure MTU
 
-The Ethernet Maximum Transmission Unit (MTU) specifies the maximum amount of data that can be transmitted in a single Ethernet frame. Configuring the correct MTU everywhere can optimize performance, particularly when using high speed Ethernet interfaces (10Gb or above). Even when lower speed links are used, such as 1Gb Ethernet, a high MTU will reduce overhead, and a consistent MTU will reduce fragmentation. Special care must be taken with MTU when tunneling traffic with GRE or VXLAN, since both of those technologies require extra bytes for the tunneling headers.
+The Ethernet Maximum Transmission Unit (MTU) specifies the maximum
+amount of data that can be transmitted in a single Ethernet frame.
+Configuring the correct MTU everywhere can optimize performance,
+particularly when using high speed Ethernet interfaces (10Gb or
+above). Even when lower speed links are used, such as 1Gb Ethernet, a
+high MTU reduces overhead, and a consistent MTU reduces fragmentation. Special care must be taken with MTU when tunneling traffic with GRE or VXLAN, since both of those technologies require extra bytes for the tunneling headers.
 
-Typically a modern Ethernet switch that supports “Jumbo” frames will support an MTU of at least 9000 bytes, plus 4 for the VLAN identifier. Some switches support higher MTU, but it depends on make and model.
+Typically a modern Ethernet switch that supports “Jumbo” frames
+supports an MTU of at least 9000 bytes, plus 4 for the VLAN identifier. Some switches support higher MTU, but it depends on make and model.
 
 NOTE: The MTU used on the VMs, plus any overhead for tunneling in GRE or VXLAN mode, must not exceed the MTU set on the physical interface or bond. If the Tenant tunneling network interface is set for an MTU of 9000, then the MTU on the VM cannot exceed 9000 in VLAN mode, or 8950 in GRE or VXLAN mode, in order to make room for up to 50 bytes of overhead. For more information about setting the physical MTU, refer to the section in Chapter 4 titled "Configuring Jumbo Frames".
 
-In order to use jumbo frames on VMs, a setting must be edited or created in two places on each OpenStack Networking controller and on each compute host. The changes to the MTU settings will be persistent because Puppet does not manage the MTU settings in RHEL-OSP 5. The VIF attached to each VM must have an MTU that is 50 bytes lower to accommodate VXLAN or GRE overhead.
+In order to use jumbo frames on VMs, a setting must be edited or
+created in two places on each OpenStack Networking controller and on
+each compute host. The changes to the MTU settings are persistent
+because Puppet does not manage the MTU settings in {ro} 7. The VIF attached to each VM must have an MTU that is 50 bytes lower to accommodate VXLAN or GRE overhead.
 
 In _/etc/nova/nova.conf_, edit or create this line:
 
@@ -133,7 +152,7 @@ In _/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini_:
  veth_mtu = 8950
 ----
 
-NOTE:  When the MTU is modified in Nova and Neutron, the services must be restarted for the settings to take effect. The settings will only apply to VMs started after the services have been restarted.
+NOTE:  When the MTU is modified in Nova and Neutron, the services must be restarted for the settings to take effect. The settings only apply to VMs started after the services have been restarted.
 
 Furthermore, the MTU on the VM image should be set to the same value, which can be done manually with the following command:
 
@@ -142,9 +161,9 @@ Furthermore, the MTU on the VM image should be set to the same value, which can 
  # *ifconfig <interface> mtu 8950 up*
 ----
 
-To enforce that each VM will be set to use jumbo frames each time it
-boots, the dhcp-option-force option will need to be set for the
-neutron-dhcp-agent. Change the DHCP options in the file
+To enforce that each VM is set to use jumbo frames each time it
+boots, the _dhcp-option-force_ option must be set for the
+_neutron-dhcp-agent_. Change the DHCP options in the file
 _/etc/neutron/dnsmasq-neutron.conf_ on all controllers:
 
 [subs=+quotes]
@@ -152,19 +171,17 @@ _/etc/neutron/dnsmasq-neutron.conf_ on all controllers:
  dhcp-option-force=26,8950
 ----
 
-After making this change, restart the neutron-dhcp-agent process on all controllers.
+After making this change, restart the _neutron-dhcp-agent_ process on all controllers.
 
-==== Manually Configuring Provider Networks
-
+==== Configuring Provider Networks
 Provider networks are networks that are attached directly to compute hosts, but traffic is not routed through the Neutron controller. Instead, provider networks are a way to attach a VM directly to a flat or VLAN network that is a part of the datacenter network. This is often how external access is provided, rather than using floating IPs on a Neutron controller. Provider networks and Neutron tenant networks can both be used simultaneously.
 
 Provider networks can only be configured by an administrator, but they appear as normal Neutron networks to the client. This allows them to be selected by a tenant when launching a VM.
-
 Provider networks do not require the use of the L3 Agent, because the traffic is not routed through the Neutron controller. Generally Neutron will provide DHCP services on provider networks. Ordinarily, metadata services are provided by a redirect on the L3 Agent, but another mechanism is provided below for metadata services on provider networks.
 
 ===== Configuring Neutron For Provider Networks
 
-Neutron maps provider networks to a bridge, and maps that bridge to a physical adapter or VLAN interface. These mappings must be made in the ovs_neutron_plugin.ini file on the controllers and compute hosts:
+Neutron maps provider networks to a bridge, and maps that bridge to a physical adapter or VLAN interface. These mappings must be made in the _ovs_neutron_plugin.ini_ file on the controllers and compute hosts:
 
 [subs=+quotes]
 ----
@@ -173,24 +190,60 @@ Neutron maps provider networks to a bridge, and maps that bridge to a physical a
  network_vlan_ranges = physnet-trunk
 ----
 
-===== Creating Provider Network Bridge
+===== Configuring the Metadata Service For Provider Networks
 
-Create the bridges on the controllers and compute hosts that were referenced in the ovs_neutron_plugin.ini file.
-
-To add a VLAN interface that is trunked to the host via bond0:
+The normal mechanism of providing metadata services via a redirect on the L3 Agent is not compatible with provider networks. Instead, configure the file _/etc/neutron/dhcp_agent.ini_ as follows:
 
 [subs=+quotes]
 ----
- # *ovs-vsctl add-br br-trunk*
- # *ovs-vsctl add-port br-trunk bond0*
+ #/etc/neutron/dhcp_agent.ini
+ enable_isolated_metadata = True
+ enable_metadata_network = True
+----
+
+NOTE: Utilizing this configuration will supersede the L3-provided metadata services for networks that do not use provider networks, but this method should also be compatible with those networks.
+
+===== Creating Provider Network Bridge With OSP-Director
+
+In order to use provider networks, the interface to the network will have to be placed on a bridge. By default, a br-ex bridge will be created, but provider networks can also be assigned to interfaces which are not part of br-ex by creating another bridge. The bridge should match on both the controller and compute nodes. For example, if bond2 (with nic5 and nic6) will be attached to provider networks, then adding this to both the controller and compute NIC configuration will allow provider networks to be created on this bond:
+
+[subs=+quotes]
+----
+            -
+              type: ovs_bridge
+              name: br-trunk
+              members:
+                -
+                  type: ovs_bond
+                  name: bond2
+                  ovs_options: {get_param: BondInterfaceOvsOptions}
+                  members:
+                    -
+                      type: interface
+                      name: nic5
+                      primary: true
+                    -
+                      type: interface
+                      name: nic6
+----
+
+===== Creating Provider Network Bridge Manually
+
+If the bridges were not created at deployment time, then create the bridges that were referenced in the ovs_neutron_plugin.ini file on the controllers and compute hosts.
+To add a VLAN interface that is trunked to the host via bond2, add the bond2 interface:
+
+[subs=+quotes]
+----
+ # ovs-vsctl add-br br-trunk
+ # ovs-vsctl add-port br-trunk bond2
 ----
 
 Alternately, to add a physical interface eth3 with a flat network:
 
 [subs=+quotes]
 ----
- # *ovs-vsctl add-br br-trunk*
- # *ovs-vsctl add-port br-trunk eth3*
+ # ovs-vsctl add-br br-trunk
+ # ovs-vsctl add-port br-trunk eth3
 ----
 
 At this point the Neutron services will have to be restarted on all controllers and compute hosts. If making the changes on an HA deployment, restart only one controller at a time and wait for it to rejoin the cluster before restarting the services on the next server.
@@ -205,15 +258,18 @@ Neutron should be aware of all the bridge mappings on all compute hosts. To vali
  # *neutron agent-show <uuid>*
 ----
 
-You should see this in the data returned by the agent-show command:
+You should see this in the data returned by the _agent-show_ command:
 
+[subs=+quotes]
+----
     "bridge_mappings": {
                 "physnet-trunk": "br-trunk"
         }
+----
 
 ===== Creating Provider Networks In Neutron
 
-Now the provider network(s) will need to be mapped to Neutron networks so that they can be assigned to VM instances.
+Now the provider network(s) must be mapped to Neutron networks so that they can be assigned to VM instances.
 
 To create a Neutron network for a VLAN interface on VLAN 201:
 
@@ -224,7 +280,7 @@ To create a Neutron network for a VLAN interface on VLAN 201:
 --shared vlan201_network*
 ----
 
-This will create a Neutron network named “vlan201_network” that maps to the physical network physnet-trunk using VLAN 201.
+This creates a Neutron network named “vlan201_network” that maps to the physical network physnet-trunk using VLAN 201.
 
 To create a Neutron network for a flat interface:
 
@@ -234,7 +290,8 @@ To create a Neutron network for a flat interface:
 --provider:network_type flat --shared flat_provider_network*
 ----
 
-This will create a Neutron network named “flat_provider_network” that maps to the physical network bridge physnet-trunk but uses no VLAN tagging.
+This creates a Neutron network named _flat_provider_network_ that maps
+to the physical network bridge _physnet-trunk_ but uses no VLAN tagging.
 
 ===== Associate a Subnet With A Provider Network
 
@@ -245,22 +302,6 @@ Finally, a subnet must be assigned to the provider network. This can be done for
  # *neutron subnet-create vlan201_network 192.168.0.0/24*
 ----
 
-===== Configuring the Metadata Service For Provider Networks
-
-As previously discussed, the normal mechanism of providing metadata
-services via a redirect on the L3 Agent is not compatible with
-provider networks. Instead, configure the file
-_/etc/neutron/dhcp_agent.ini_ as follows:
-
-[subs=+quotes]
-----
- #/etc/neutron/dhcp_agent.ini
- enable_isolated_metadata = True
- enable_metadata_network = True
-----
-
-NOTE: Utilizing this configuration will supersede the L3-provided metadata services for networks that do not use provider networks, but this method should also be compatible with those networks.
-
 ==== Launching VMs
 
 The VMs used for testing in this reference architecture were Fedora 20 x86_64 running inside m1.small KVM profiles. The Compute hosts were idle except for the test VM images, and there was no oversubscription of memory or CPU resources. VMs were launched from Horizon and used the default security group, with the addition of allowing incoming SSH.
@@ -269,7 +310,8 @@ The VMs used for testing in this reference architecture were Fedora 20 x86_64 ru
 .image-net-horizon
 image::images/ra_ospnet_8.png[caption="Figure 5.1: " title="Selecting Networks for VM in Horizon" align="center"]
 
-When launching a VM, Neutron networks can be assigned to virtual NICs on the VM. Typically the network attached to NIC 1 will provide DHCP services for the VM. The network controllers should be running a neutron-dhcp-agent process for the network, or there should be infrastructure DHCP services on that network.
+When launching a VM, Neutron networks can be assigned to virtual NICs
+on the VM. Typically the network attached to NIC 1 provides DHCP services for the VM. The network controllers should be running a neutron-dhcp-agent process for the network, or there should be infrastructure DHCP services on that network.
 
 ==== Floating IPs
 

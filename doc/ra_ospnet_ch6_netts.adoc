@@ -31,7 +31,8 @@ A useful command for validating that the tunnels are up when using OVS is to loo
  $ *ovsdb-client dump*
 ----
 
-You will see OVS ports for all the tunnels, including local_ip and remote_ip pairs for each of the tunnels, corresponding to the endpoints on the compute hosts.
+You see OVS ports for all the tunnels, including _local_ip_ and
+_remote_ip_ pairs for each of the tunnels, corresponding to the endpoints on the compute hosts.
 
 === Virtual Machine Virtual Ethernet Interfaces
 
@@ -47,7 +48,11 @@ Steps to capture VM traffic from a Compute host:
  | 2b0f361c-b804-41d5-aa29-3b14b9b62114 |      | fa:16:3e:71:71:b9 | {"subnet_id": "a2262eb8-28f0-4b91-a729-e015fe358371", "ip_address": "172.21.0.54"} |
 ----
 +
-2. The interface on the Compute host will have a name that is constructed of the first 11 characters of the Neutron Port ID, in this case “2b0f361c-b8”. You can see this reflected on the Compute host in both the interfaces shown via ifconfig and the OVS ports shown via ovs-vsctl show:
+2. The interface on the Compute host has a name constructed of the
+   first 11 characters of the Neutron Port ID, in this case
+   “2b0f361c-b8”. You can see this reflected on the Compute host in
+   both the interfaces shown via ifconfig and the OVS ports shown via
+   _ovs-vsctl show_:
 +
 [subs=+quotes]
 ----
@@ -62,7 +67,8 @@ Steps to capture VM traffic from a Compute host:
             Interface "qvo2b0f361c-b8"
 ----
 +
-3. In closer detail, the port can be shown via the command ovs-vsctl show as part of the Integration bridge:
+3. In closer detail, the port can be shown via the command _ovs-vsctl
+   show_ as part of the Integration bridge:
 +
 [subs=+quotes]
 ----
