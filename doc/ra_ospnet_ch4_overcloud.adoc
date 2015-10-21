@@ -13,6 +13,7 @@ reference architecture uses the _stack_ user.
 In order to use network isolation, we must define Overcloud
 networks. Each has an IP subnet, a range of IP addresses to use on
 that subnet, and a VLAN ID. These parameters are defined in our network environment file.
+
 In addition to the global settings in the network environment, there
 is a template that determines the network interface controller (NIC)
 configuration for each role. In some cases, these templates must be
@@ -75,7 +76,11 @@ The switch port configurations were the same for each node in the environment. I
 === Creating an Environment File
 
 The network configuration is defined using templates in the TripleO Heat templates directory:
-_/usr/share/openstack-tripleo-heat-templates/_
+
+[subs=+quotes]
+----
+/usr/share/openstack-tripleo-heat-templates/
+----
 
 Rather than modify these templates directly, we override some of the
 values in these templates with values that match the local
@@ -191,15 +196,15 @@ It is important to make sure that there are no IP conflicts on the Provisioning 
 
 [subs=+quotes]
 ----
-$ sudo yum install -y nmap
-$ nmap -sn 192.0.2.0/24
+$ *sudo yum install -y nmap*
+$ *nmap -sn 192.0.2.0/24*
 ----
 
 For example, you should see the IP address(es) on the Undercloud, and any other hosts that are present on the subnet:
 
 [subs=+quotes]
 ----
-$ nmap -sn 192.0.2.0/24
+$ *nmap -sn 192.0.2.0/24*
 Starting Nmap 6.40 ( http://nmap.org ) at 2015-10-02 15:14 EDT
 Nmap scan report for 192.0.2.1
 Host is up (0.00057s latency).
@@ -491,21 +496,22 @@ resource_registry
     CinderIscsiNetwork: storage
     GlanceApiNetwork: storage
     GlanceRegistryNetwork: internal_api
-    KeystoneAdminApiNetwork: ctlplane # Admin connection for Undercloud
+    *KeystoneAdminApiNetwork: ctlplane # Admin connection for
+    Undercloud*
     KeystonePublicApiNetwork: internal_api
     NeutronApiNetwork: internal_api
     HeatApiNetwork: internal_api
     NovaApiNetwork: internal_api
     NovaMetadataNetwork: internal_api
     NovaVncProxyNetwork: internal_api
-    SwiftMgmtNetwork: storage # Changed from storage_mgmt
+    *SwiftMgmtNetwork: storage # Changed from storage_mgmt*
     SwiftProxyNetwork: storage
     HorizonNetwork: internal_api
     MemcachedNetwork: internal_api
     RabbitMqNetwork: internal_api
     RedisNetwork: internal_api
     MysqlNetwork: internal_api
-    CephClusterNetwork: storage # Changed from storage_mgmt
+    *CephClusterNetwork: storage # Changed from storage_mgmt*
     CephPublicNetwork: storage
     ControllerHostnameResolveNetwork: internal_api
     ComputeHostnameResolveNetwork: internal_api
@@ -548,18 +554,20 @@ First we copy the sample configuration templates from one of the subdirectories,
 
 [subs=+quotes]
 ----
- $ mkdir ~/net-configs
- $ export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates
- $ cp $TEMPLATE_DIR/network/config/bond-with-vlans/* ~/templates/net-configs
+ $ *mkdir ~/net-configs*
+ $ *export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates*
+ $ *cp $TEMPLATE_DIR/network/config/bond-with-vlans/*
+ ~/templates/net-configs*
 ----
 
 Another set of examples for systems with a single or dual data NIC is in _single-nic-vlans_:
 
 [subs=+quotes]
 ----
- $ mkdir ~/net-configs
- $ export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates
- $ cp $TEMPLATE_DIR/network/config/single-nic-vlans/* ~/templates/net-configs
+ $ *mkdir ~/net-configs*
+ $ *export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates*
+ $ *cp $TEMPLATE_DIR/network/config/single-nic-vlans/*
+ ~/templates/net-configs*
 ----
 
 NOTE: The single-nic templates are generally used for testing {ro} in a fully virtualized environment. Each VM has only one interface, and the network separation is done with different VLANs under the same bridge.
@@ -721,12 +729,12 @@ The individual interfaces may need to be modified. As an example, below are the 
 [subs=+quotes]
 ----
        network_config:
-            # Add a DHCP infrastructure network to nic2
-            -
-              type: interface
-              name: nic2
-              use_dhcp: true
-              defroute: false
+            *# Add a DHCP infrastructure network to nic2*
+            *-*
+              *type: interface*
+              *name: nic2*
+              *use_dhcp: true*
+              *defroute: false*
             -
               type: ovs_bridge
               name: br-bond
@@ -736,14 +744,14 @@ The individual interfaces may need to be modified. As an example, below are the 
                   name: bond1
                   ovs_options: {get_param: BondInterfaceOvsOptions}
                   members:
-                    # Modify bond NICs to use nic3 and nic4
+                    *# Modify bond NICs to use nic3 and nic4*
                     -
                       type: interface
-                      name: nic3
+                      *name: nic3*
                       primary: true
                     -
                       type: interface
-                      name: nic4
+                      *name: nic4*
 ----
 
 When using numbered interfaces ("nic1", "nic2", etc.) instead of named interfaces ("eth0", "eno2", etc.), the network interfaces of hosts within a role do not have to be exactly the same. For instance, one host may have interfaces em1 and em2, while another has eno1 and eno2, but both hosts' NICs can be referred to as nic1 and nic2.
@@ -761,17 +769,18 @@ uses the one with the lowest metric. If there are multiple DHCP interfaces, this
 
 [subs=+quotes]
 ----
-    # No default route on the Provisioning network
+    *# No default route on the Provisioning network*
             -
               type: interface
               name: nic1
               use_dhcp: true
-              defroute: no
-            # Instead use this DHCP infrastructure VLAN as the default route
-            -
-              type: interface
-              name: nic2
-              use_dhcp: true
+              *defroute: no*
+            *# Instead use this DHCP infrastructure VLAN as the
+            default route*
+            *-*
+              *type: interface*
+              *name: nic2*
+              *use_dhcp: true*
 ----
 
 By default, {ro} director 7.1 uses static IP addressing on all interfaces. To set a static route on an interface with a static IP, specify a route to the subnet. For instance, here is a hypothetical route to the 10.1.2.0/24 subnet via the gateway at 172.17.0.1 on the Internal API network:
@@ -785,10 +794,10 @@ By default, {ro} director 7.1 uses static IP addressing on all interfaces. To se
                   addresses:
                   -
                     ip_netmask: {get_param: InternalApiIpSubnet}
-              routes:
-                -
-                  ip_netmask: 10.1.2.0/24
-                  next_hop: 172.17.0.1
+              *routes:*
+                *-*
+                  *ip_netmask: 10.1.2.0/24*
+                  *next_hop: 172.17.0.1*
 ----
 
 ==== Using the Native VLAN for Floating IPs
@@ -869,13 +878,13 @@ of 1500. Traffic which crosses a router border is limited to an MTU of 1500, so 
     -
                     type: ovs_bond
                     name: bond1
-                    mtu: 9000
+                    *mtu: 9000*
                     ovs_options: {get_param: BondInterfaceOvsOptions}
                     members:
                       -
                         type: interface
                         name: nic2
-                        mtu: 9000
+                        *mtu: 9000*
                         primary: true
                       -
                         type: interface
@@ -894,10 +903,11 @@ of 1500. Traffic which crosses a router border is limited to an MTU of 1500, so 
                         ip_netmask: 0.0.0.0/0
                         next_hop: {get_param: ExternalInterfaceDefaultRoute}
                   -
-                    # MTU 9000 for Internal API, Storage, and Storage MGMT
+                    *# MTU 9000 for Internal API, Storage, and Storage
+                    MGMT*
                     type: vlan
                     device: bond1
-                    mtu: 9000
+                    *mtu: 9000*
                     vlan_id: {get_param: InternalApiNetworkVlanID}
                     addresses:
                     -
@@ -912,7 +922,7 @@ for _veth_mtu_ and _network_device_mtu_ respectively need to be changed, as well
 
 When customizing network interface templates, make sure you make changes in all the roles used in the deployment. The physical interface configuration does not have to be the same for various roles, but each host within the role should have the same effective physical network configuration. For instance, some hosts may have NICs named em1 – em4, while others have NICs named eno1 – eno4, but all hosts may be configured using nic1 – nic4.
 
-==== Changes to Network Configuration in OSP-D 7.1
+==== Changes to Network Configuration in {ro} director 7.1
 The 7.1 version of {ro} director supports static IPs on the
 Provisioning network. These changes require additional parameters for
 setting static IPs, routes, and DNS servers. If you are reusing

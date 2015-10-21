@@ -64,7 +64,6 @@ internal to the Overcloud, and external access is through a floating IP.
 [subs=+quotes]
 ----
  $ *neutron net-create default-net –provider:vxlan*
- 
  $ *neutron subnet-create --name default-subnet default-net
  172.21.0.0/22*
 ----
@@ -107,21 +106,18 @@ Steps for creating routers to route traffic between Neutron networks:
 +
 [subs=+quotes]
 ----
- # *neutron router-interface-add router-1to2 subnet=subnet-1*
-----
-+
+# *neutron router-interface-add router-1to2 subnet=subnet-1*
 Added interface 7fa87edf-6504-4d50-9886-98951baa9c93 to router router-1to2.
-+
-[subs=+quotes]
-----
- # *neutron router-interface-add router-1to2 subnet=subnet-2*
-----
-+
+# *neutron router-interface-add router-1to2 subnet=subnet-2*
 Added interface fbe69fb7-d5b2-4ea6-835a-9ae8b6274853 to router router-1to2.
-+
+----
+
 The above commands create a router named “router-1to2” between the subnets named “subnet-1” and “subnet-2” using the default router address (the first IP address on the subnet) on each subnet.
-+
-To use a different IP (other than the first IP in the network), first create a port with the desired IP using the neutron port-create command, then use the parameter port= instead of subnet= with the neutron router-interface-add command.
+
+To use a different IP (other than the first IP in the network), first
+create a port with the desired IP using the _neutron port-create_
+command, then use the parameter port= instead of subnet= with the
+_neutron router-interface-add_ command.
 
 ==== Configure MTU
 
@@ -311,20 +307,16 @@ Finally, a subnet must be assigned to the provider network. This can be done for
 
 The VMs used for testing in this reference architecture were Fedora 20 x86_64 running inside m1.small KVM profiles. The Compute hosts were idle except for the test VM images, and there was no oversubscription of memory or CPU resources. VMs were launched from Horizon and used the default security group, with the addition of allowing incoming SSH.
 
+When launching a VM, Neutron networks can be assigned to virtual NICs
+on the VM. Typically the network attached to NIC 1 provides DHCP services for the VM. The network controllers should be running a neutron-dhcp-agent process for the network, or there should be infrastructure DHCP services on that network.
+
 [[image-net-horizon]]
 .image-net-horizon
 image::images/ra_ospnet_8.png[caption="Figure 5.1: " title="Selecting Networks for VM in Horizon" align="center"]
 
-When launching a VM, Neutron networks can be assigned to virtual NICs
-on the VM. Typically the network attached to NIC 1 provides DHCP services for the VM. The network controllers should be running a neutron-dhcp-agent process for the network, or there should be infrastructure DHCP services on that network.
-
 ==== Floating IPs
 
 The Floating IP functionality and operation of Neutron is significantly different from Nova Networking. In Neutron, Floating IPs are attached to a Neutron router. Neutron routers are implemented using a neutron-l3-agent process running on the Neutron controller(s). The L3 agent uses iptables to implement floating IPs to do the network address translation (NAT). The agent also performs source NAT on outbound traffic that is destined for addresses outside the cloud. Filtering is performed according to rules in the applicable Nova Security Group that is applied to the VM.
-
-[[image-ra-net]]
-.image-ra-net
-image::images/ra_ospnet_9.png[caption="Figure 5.2: " title="Reference Architecture Neutron Network Topology" align="center"]
 
 In order for Floating IPs to function correctly, a Neutron router must
 have interfaces on two networks: the Tenant network where the VMs are
@@ -332,5 +324,10 @@ attached, and an External network that has external reachability. If
 the Floating IPs are to be accessible from the Internet, public IP
 addresses must be used on the External network and a public IP must be
 assigned to the Neutron router. In Figure 5.2 the Tenant1_router is
-attached to both the External network and the Tenant_External
+attached to both the _External_ network and the _Tenant_External_
 network, and provides Floating IPs in the 10.1.247.64/27 range for the pictured VMs.
+
+[[image-ra-net]]
+.image-ra-net
+image::images/ra_ospnet_9.png[caption="Figure 5.2: " title="Reference Architecture Neutron Network Topology" align="center"]
+
