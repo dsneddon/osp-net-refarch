@@ -1,4 +1,5 @@
 [chapter 3]
+[[network_high_availability]]
 == Network High Availability
 
 This section presents several techniques used for network high
@@ -181,6 +182,6 @@ Depending on vendor and configuration, the load sharing algorithm may
 use source and destination IP addresses, port numbers, protocols, or
 other variables to add entropy and utilize all available links. For
 example, a simple load sharing algorithm using IP and source port
-might calculate '((source IP + destination IP + source port) modulo
-number_of_paths)' and assign a connection to route A or B depending on
+might calculate *((source IP + destination IP + source port) modulo
+number_of_paths)* and assign a connection to route A or B depending on
 the result.

@@ -190,9 +190,18 @@ at .10 and continues to .200. This results in the static IPs and
 virtual IPs that are assigned starting at .10, and are assigned
 upwards with .200 being the highest assigned IP. The External network
 hosts the Horizon dashboard and the OpenStack public API. If the
-External network is used for both cloud administration and floating IPs, we need to make sure there is room for a pool of IPs to use as floating IPs for VM instances. Alternately, the floating IPs can be placed on a separate VLAN (which is configured by the operator post-deployment).
+External network is used for both cloud administration and floating
+IPs, we need to make sure there is room for a pool of IPs to use as
+floating IPs for VM instances. Alternately, the floating IPs can be
+placed on a separate VLAN (which is configured by the operator post-deployment).
 
-It is important to make sure that there are no IP conflicts on the Provisioning network. Perform a port scan on the Provisioning net if you are not certain that the IPs used for discovery IP range and host IP range are free (replace the network in the nmap command with the IP subnet of the Provisioning network in CIDR bitmask notation).
+It is important to make sure that there are no IP conflicts on the
+Provisioning network. Perform a port scan on the Provisioning network
+if you are not certain that the IPs used for discovery IP range and
+host IP range are free.
+
+NOTE: replace the network in the _nmap_ command with the IP subnet of
+the Provisioning network in CIDR bitmask notation.
 
 [subs=+quotes]
 ----
@@ -200,7 +209,8 @@ $ *sudo yum install -y nmap*
 $ *nmap -sn 192.0.2.0/24*
 ----
 
-For example, you should see the IP address(es) on the Undercloud, and any other hosts that are present on the subnet:
+For example, you should see the IP address(es) on the Undercloud, and
+any other hosts that are present on the subnet:
 
 [subs=+quotes]
 ----
@@ -258,7 +268,8 @@ supports (and is configured to use) LACP bonding. If LACP cannot be
 established, the bond falls back to active/backup mode, with fault
 tolerance, but where only one link in the bond is used at a time.
 
-The default bonding options tries to negotiate LACP, but falls back to active-backup if LACP cannot be established:
+The default bonding options tries to negotiate LACP, but falls back to
+active-backup if LACP cannot be established:
 
 [subs=+quotes]
 ----
@@ -343,11 +354,16 @@ Here is the full set of service-to-net mappings, this can be included in the env
     CephStorageHostnameResolveNetwork: storage
 ----
 
+[[modify_which_networks_get_deployed]]
 === Optional: Modify Which Networks Get Deployed
 
-The settings in the _resource_registry_ section of the environment file for networks and ports do not ordinarily need to be changed. The list of networks can be changed, however, if only a subset of the networks are desired.
+The settings in the _resource_registry_ section of the environment
+file for networks and ports do not ordinarily need to be changed. The
+list of networks can be changed, however, if only a subset of the networks are desired.
 
-NOTE: When specifying custom networks and ports, do not include the _environments/network-isolation.yaml_ on the deployment command line. Instead, specify all the networks and ports in the network environment file.
+NOTE: When specifying custom networks and ports, do not include the
+_environments/network-isolation.yaml_ on the deployment command line.
+Instead, specify all the networks and ports in the network environment file.
 
 In order to use isolated networks, the servers must have IP addresses on each network. We use Neutron in the Undercloud to manage IP addresses on the isolated networks, so we need to enable Neutron port creation for each network. We override the resource registry in our environment file.
 
@@ -417,9 +433,13 @@ First, this is the complete set of networks and ports that can be deployed:
 
 The first section of this file has the resource registry declaration
 for the _OS::TripleO::Network::*_ resources. By default these
-resources point at a _noop.yaml_ file that does not create any networks. By pointing these resources at the YAML files for each network, we enable the creation of these networks.
+resources point at a _noop.yaml_ file that does not create any networks.
+By pointing these resources at the YAML files for each network, we
+enable the creation of these networks.
 
-The next several sections create the IP addresses for the nodes in each role. The controller nodes have IPs on each network. The compute and storage nodes each have IPs on a subset of the networks.
+The next several sections create the IP addresses for the nodes in each
+role. The controller nodes have IPs on each network. The compute and
+storage nodes each have IPs on a subset of the networks.
 
 To deploy without one of the pre-configured networks, disable the
 network definition and the corresponding port definition for the role.
@@ -522,7 +542,8 @@ resource_registry
 
 By using _noop.yaml_, no network or ports are created, so the services
 on the Storage Management network would default to the provisioning
-network. This can be changed in the _ServiceNetMap_ (see above) in order to move the storage management services to another network, such as storage.
+network. This can be changed in the _ServiceNetMap_ (see above) in
+order to move the storage management services to another network, such as storage.
 
 === Network Interface Configuration Template Registry
 In the environment file, we point to a network interface configuration
@@ -550,14 +571,15 @@ _os-net-config_ tool. That tool is configured using templates. There are
 sample configurations inside of the
 _/usr/share/openstack-tripleo-heat-templates/network/config_ directory on the Undercloud.
 
-First we copy the sample configuration templates from one of the subdirectories, for example _bond-with-vlans_ (for systems with 3 or more data NICs in addition to IPMI):
+First we copy the sample configuration templates from one of the
+subdirectories, for example _bond-with-vlans_ (for systems with 3 or
+more data NICs in addition to IPMI):
 
 [subs=+quotes]
 ----
  $ *mkdir ~/net-configs*
  $ *export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates*
- $ *cp $TEMPLATE_DIR/network/config/bond-with-vlans/*
- ~/templates/net-configs*
+ $ *cp $TEMPLATE_DIR/network/config/bond-with-vlans/ ~/templates/net-configs*
 ----
 
 Another set of examples for systems with a single or dual data NIC is in _single-nic-vlans_:
@@ -566,14 +588,20 @@ Another set of examples for systems with a single or dual data NIC is in _single
 ----
  $ *mkdir ~/net-configs*
  $ *export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates*
- $ *cp $TEMPLATE_DIR/network/config/single-nic-vlans/*
- ~/templates/net-configs*
+ $ *cp $TEMPLATE_DIR/network/config/single-nic-vlans/ ~/templates/net-configs*
 ----
 
-NOTE: The single-nic templates are generally used for testing {ro} in a fully virtualized environment. Each VM has only one interface, and the network separation is done with different VLANs under the same bridge.
+NOTE: The single-nic templates are generally used for testing {ro} in
+a fully virtualized environment. Each VM has only one interface, and
+the network separation is done with different VLANs under the same bridge.
 
 Next we need to customize these templates to fit the environment.
-Let's start by looking at the unedited sample _controller.yaml_ from the _bond-with-vlans_ templates. This sample configuration uses the first Ethernet NIC as the provisioning network, and the second and third Ethernet NICs are a bond carrying all the Overcloud networks. The top section and the parameters section do not need to be modified. Only the section under "network_config" should be customized:
+Let's start by looking at the unedited sample _controller.yaml_ from
+the _bond-with-vlans_ templates. This sample configuration uses the
+first Ethernet NIC as the provisioning network, and the second and
+third Ethernet NICs are a bond carrying all the Overcloud networks.
+The top section and the parameters section do not need to be modified.
+Only the section under _network_config_ should be customized:
 
 [subs=+quotes]
 ----
@@ -724,7 +752,10 @@ outputs:
 
 ==== Configuring Interfaces
 
-The individual interfaces may need to be modified. As an example, below are the modifications that would be required to use the second NIC to connect to an infrastructure network with DHCP addresses, and to use the third and fourth NICs for the bond:
+The individual interfaces may need to be modified. As an example,
+below are the modifications that would be required to use the second
+NIC to connect to an infrastructure network with DHCP addresses, and
+to use the third and fourth NICs for the bond:
 
 [subs=+quotes]
 ----
@@ -762,10 +793,18 @@ The numbered NIC scheme only takes into account the interfaces that are live (ha
 
 There are two ways that a host may have its default routes set. If the
 interface is using DHCP, and the DHCP server offers a gateway address,
-the system installs a default route for that gateway. Otherwise, a default route may be set manually on an interface with a static IP.
+the system installs a default route for that gateway. Otherwise, a
+default route may be set manually on an interface with a static IP.
 
 Although the Linux kernel supports multiple default gateways, it only
-uses the one with the lowest metric. If there are multiple DHCP interfaces, this can result in an unpredictable default gateway. In this case, it is recommended that _defroute=no_ be set for the interfaces other than the one where we want the default route. In this case, we want a DHCP interface (NIC 2) to be the default route (rather than the Provisioning interface), so we disable the default route on the provisioning interface (note that the defroute parameter only applies to routes learned via DHCP):
+uses the one with the lowest metric. If there are multiple DHCP
+interfaces, this can result in an unpredictable default gateway. In
+this case, it is recommended that _defroute=no_ be set for the
+interfaces other than the one where we want the default route. In this
+case, we want a DHCP interface (NIC 2) to be the default route (rather
+than the Provisioning interface), so we disable the default route on
+the provisioning interface. Note that the defroute parameter only
+applies to routes learned via DHCP.
 
 [subs=+quotes]
 ----
@@ -860,18 +899,27 @@ For example, if the external network is on the native VLAN, the bond configurati
 
 NOTE: When moving the address (and possibly route) statements onto the bridge, be sure to remove the corresponding VLAN interface from the bridge. Make sure to make the changes to all applicable roles. The External network is only on the controllers, so only the controller template needs to be changed. The Storage network on the other hand is attached to all roles, so if the storage network were the default VLAN, all roles would need to be edited.
 
+[[configuring_jumbo_frames]]
 ==== Configuring Jumbo Frames
 
-The Maximum Transmission Unit (MTU) setting determines the maximum amount of data that can be transmitted by a single Ethernet frame. Using a larger value can result in less overhead, since each frame adds data in the form of a header.
+The Maximum Transmission Unit (MTU) setting determines the maximum
+amount of data that can be transmitted by a single Ethernet frame.
+Using a larger value can result in less overhead, since each frame adds data in the form of a header.
 
 The default value MTU 1500, and using a value higher than that
-requires the switch port to be configured to support jumbo frames. Most switches support an MTU of at least 9000, but many are configured for 1500 by default. The MTU of a VLAN cannot exceed the MTU of the physical interface. Make sure to include the MTU value on the bond and/or interface.
+requires the switch port to be configured to support jumbo frames.
+Most switches support an MTU of at least 9000, but many are configured
+for 1500 by default. The MTU of a VLAN cannot exceed the MTU of the
+physical interface. Make sure to include the MTU value on the bond and/or interface.
 
-Storage, Storage Management, Internal API, and Tenant networking can all benefit from jumbo frames. In testing, tenant networking throughput was over 300% greater when using jumbo frames in conjunction with VXLAN tunnels.
+Storage, Storage Management, Internal API, and Tenant networking can
+all benefit from jumbo frames. In testing, tenant networking
+throughput was over 300% greater when using jumbo frames in conjunction with VXLAN tunnels.
 
 NOTE: It is recommended that the Provisioning interface, External
 interface, and any floating IP interfaces be left at the default MTU
-of 1500. Traffic which crosses a router border is limited to an MTU of 1500, so connectivity problems can occur if jumbo frames are used on these networks.
+of 1500. Traffic which crosses a router border is limited to an MTU of
+1500, so connectivity problems can occur if jumbo frames are used on these networks.
 
 [subs=+quotes]
 ----
@@ -916,7 +964,9 @@ of 1500. Traffic which crosses a router border is limited to an MTU of 1500, so 
 
 NOTE: In order for VMs to take advantage of jumbo frames, several
 settings need to be made post-deployment. The Neutron and Nova options
-for _veth_mtu_ and _network_device_mtu_ respectively need to be changed, as well as the default MTU given to VMs via DHCP. See the section in Chapter 5 titled "Configure MTU" for details of this required change.
+for _veth_mtu_ and _network_device_mtu_ respectively need to be
+changed, as well as the default MTU given to VMs via DHCP. See the
+<<configure_mtu>> section for details of this required change.
 
 ==== Making Changes to All Roles
 
@@ -929,7 +979,8 @@ setting static IPs, routes, and DNS servers. If you are reusing
 templates from an {rpo} 7.0 deployment, you must modify the templates
 to be compatible with version 7.1.
 
-When using static Provisioning IPs, the network environment file now needs to contain additional resource defaults (customize to match the environment):
+When using static Provisioning IPs, the network environment file now
+needs to contain additional resource defaults. Customize to match the environment:
 
 [subs=+quotes]
 ----
@@ -964,6 +1015,11 @@ static IPs, these must be added in any case:
     type: json
   EC2MetadataIp: # Override this via parameter_defaults
     description: The IP address of the EC2 metadata server.
+    type: string
+  # Gateway router for the provisioning network (or Undercloud IP)
+  ControlPlaneDefaultRoute:10.8.146.254
+    default: METADATA_IP_ADDR # default to the undercloud
+    description: The subnet CIDR of the control plane network.
     type: string
 ----
 
@@ -1048,10 +1104,16 @@ Here are the changes required for the compute and storage roles:
 
 === Deploying the Overcloud with Network Isolation
 
-When deploying with network isolation, you should specify the NTP server for the overcloud nodes. If the clocks are not synchronized, some OpenStack services may be unable to start, especially when using HA. The NTP server should be reachable from both the External and Provisioning subnets. The neutron network type should be specified, along with the tunneling or VLAN parameters.
+When deploying with network isolation, you should specify the NTP
+server for the Overcloud nodes. If the clocks are not synchronized,
+some OpenStack services may be unable to start, especially when using
+HA. The NTP server should be reachable from both the External and
+Provisioning subnets. The neutron network type should be specified,
+along with the tunneling or VLAN parameters.
 
 To deploy with network isolation and include the network environment
-file, use the *-e* parameters with the openstack overcloud deploy command. For instance, to deploy VXLAN mode, the deployment command might be:
+file, use the *-e* parameters with the openstack overcloud deploy
+command. For instance, to deploy VXLAN mode, the deployment command might be:
 
 [subs=+quotes]
 ----
@@ -1089,4 +1151,8 @@ _br-tenant_:
  --neutron-network-vlan-ranges tenantvlan:30:100*
 ----
 
-NOTE: When specifying custom networks and ports (such as when deploying only a subset of the available networks), do not include the _environments/network-isolation.yaml_ on the deployment command line. Instead, specify all the networks and ports in the network environment file. See the previous section titled "Optional: Modify Which Networks Get Deployed".
+NOTE: When specifying custom networks and ports (such as when
+deploying only a subset of the available networks), do not include the
+_environments/network-isolation.yaml_ on the deployment command line.
+Instead, specify all the networks and ports in the network environment
+file. See the previous section <<modify_which_networks_get_deployed>>.

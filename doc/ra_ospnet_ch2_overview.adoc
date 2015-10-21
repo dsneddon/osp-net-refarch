@@ -313,15 +313,15 @@ Neutron supports a variety of networking modes using plugins. The
 modes covered in this document are supported by the Neutron
 Modular Layer 2 (ML2) plugin, which has a variety of drivers to
 support different networking models. At a high level, these
-modes are VLAN, GRE, and VXLAN, which are described in detail in
-section 2.3.3 (“Neutron ML2 Plugin Type Drivers”).
+modes are VLAN, GRE, and VXLAN, which are described in detail in the
+<<neutron-ml2-plugin-type-drivers>> section.
 
 ==== High Availability Network Methodologies Overview
 
 Some high availability methodologies can be added to an existing
 deployment, but some need to be designed into the network from
 the beginning. High availability methodologies are covered
-further in Section 3.
+further in the <<network_high_availability>> chapter.
 
 These methodologies are infrastructure-oriented, and must be
 included in the initial design:
@@ -453,6 +453,7 @@ whether vendor-specific functionality is desired.  A full list
 of the certified plugins and drivers is available at
 https://access.redhat.com/certifications.
 
+[[neutron-ml2-plugin-type-drivers]]
 ====  Neutron ML2 Plugin Type Drivers
 
 This section describes the type drivers that are available in
@@ -554,7 +555,8 @@ perspective, it is sharing a layer 2 segment with the other VMs
 on the virtual network. VXLAN endpoints encapsulate and
 decapsulate traffic, so the traffic sent and received by VMs is
 unaffected by the VXLAN encapsulation.
-Red Hat recommends the OVS mechanism driver in conjunction with
+
+NOTE: Red Hat recommends the OVS mechanism driver in conjunction with
 the VXLAN type driver.  It is also possible to use Linux Bridge
 in the place of OVS for connectivity inside the hypervisor. This
 may be preferable in certain circumstances, such as when using
@@ -569,6 +571,7 @@ assigning it to a tenant network allows the VMs in that network
 to communicate with other tenant networks (also known as
 East-West routing) or upstream if an external gateway is defined
 for the router (also known as North-South routing).
+
 When a router is created in Neutron, it is assigned to a Neutron
 network. The router is not started until the first VM in that
 network is created.
