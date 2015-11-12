@@ -976,7 +976,7 @@ When customizing network interface templates, make sure you make changes in all 
 The 7.1 version of {ro} director supports static IPs on the
 Provisioning network. These changes require additional parameters for
 setting static IPs, routes, and DNS servers. If you are reusing
-templates from an {rpo} 7.0 deployment, you must modify the templates
+templates from an {ro} 7.0 deployment, you must modify the templates
 to be compatible with version 7.1.
 
 When using static Provisioning IPs, the network environment file now
@@ -1032,24 +1032,24 @@ Here is an example of the changes required for the controller role (in bold):
 ----
           network_config:
             -
-              type: interface
-              name: nic1
-              use_dhcp: false
-              addresses:
+              *type: interface*
+              *name: nic1*
+              *use_dhcp: false*
+              *addresses:*
                 -
-                  ip_netmask:
-                    list_join:
-                      - '/'
-                      - - {get_param: ControlPlaneIp}
-                        - {get_param: ControlPlaneSubnetCidr}
-              routes:
+                  *ip_netmask:*
+                    *list_join:*
+                      *- '/'*
+                      *- - {get_param: ControlPlaneIp}*
+                        *- {get_param: ControlPlaneSubnetCidr}*
+              routes:*
                 -
-                  ip_netmask: 169.254.169.254/32
-                  next_hop: {get_param: EC2MetadataIp}
+                  *ip_netmask: 169.254.169.254/32*
+                  *next_hop: {get_param: EC2MetadataIp}*
             -
               type: ovs_bridge
               name: {get_input: bridge_name}
-              dns_servers: {get_param: DnsServers}
+              *dns_servers: {get_param: DnsServers}*
               members:
                 -
                   type: ovs_bond
@@ -1082,24 +1082,24 @@ Here are the changes required for the compute and storage roles:
 ----
           network_config:
             -
-              type: interface
-              name: nic1
-              use_dhcp: false
-              dns_servers: {get_param: DnsServers}
-              addresses:
+              *type: interface*
+              *name: nic1*
+              *use_dhcp: false*
+              *dns_servers: {get_param: DnsServers}*
+              *addresses:*
                 -
-                  ip_netmask:
-                    list_join:
-                      - '/'
-                      - - {get_param: ControlPlaneIp}
-                        - {get_param: ControlPlaneSubnetCidr}
-              routes:
+                  *ip_netmask:*
+                    *list_join:*
+                      - *'/'*
+                      - - *{get_param: ControlPlaneIp}*
+                        - *{get_param: ControlPlaneSubnetCidr}*
+              *routes:*
                 -
-                  ip_netmask: 169.254.169.254/32
-                  next_hop: {get_param: EC2MetadataIp}
+                  *ip_netmask: 169.254.169.254/32*
+                  *next_hop: {get_param: EC2MetadataIp}*
                 -
-                  default: true
-                  next_hop: {get_param: ControlPlaneDefaultRoute}
+                  *default: true*
+                  *next_hop: {get_param: ControlPlaneDefaultRoute}*
 ----
 
 === Deploying the Overcloud with Network Isolation
