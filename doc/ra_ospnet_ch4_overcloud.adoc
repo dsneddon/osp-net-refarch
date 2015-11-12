@@ -182,7 +182,7 @@ parameter_defaults:
   # Generally the IP of the Undercloud
   EC2MetadataIp: 10.8.146.1
   # Define the DNS servers (maximum 2) for the overcloud nodes
-  DnsServers:['8.8.8.8','8.8.4.4']
+  DnsServers: ['8.8.8.8','8.8.4.4']
 ----
 
 In this case, the Allocation Pool for the Internal API network starts
@@ -990,7 +990,7 @@ needs to contain additional resource defaults. Customize to match the environmen
   # Generally the IP of the Undercloud
   EC2MetadataIp: 10.8.146.1
   # Define the DNS servers (maximum 2) for the overcloud nodes
-  DnsServers:['8.8.8.8','8.8.4.4']
+  DnsServers: ['8.8.8.8','8.8.4.4']
 ----
 
 The NIC templates for each role must be modified as well. First,
