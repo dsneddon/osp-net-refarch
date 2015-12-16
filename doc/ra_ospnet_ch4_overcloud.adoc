@@ -1042,7 +1042,7 @@ Here is an example of the changes required for the controller role (in bold):
                       *- '/'*
                       *- - {get_param: ControlPlaneIp}*
                         *- {get_param: ControlPlaneSubnetCidr}*
-              routes:*
+              *routes:*
                 -
                   *ip_netmask: 169.254.169.254/32*
                   *next_hop: {get_param: EC2MetadataIp}*
