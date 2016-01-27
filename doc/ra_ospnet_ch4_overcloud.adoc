@@ -122,12 +122,14 @@ _parameter_defaults_ section needs to be customized for the local environment.
   StorageMgmtNetCidr: 172.19.0.0/24
   TenantNetCidr: 172.16.0.0/24
   ExternalNetCidr: 10.0.0.0/24
+  # CIDR subnet mask length for provisioning network
+  ControlPlaneSubnetCidr: 24
   # Customize the IP ranges on each network to use for static IPs and VIPs
   InternalApiAllocationPools: [{'start': '172.17.0.10', 'end': '172.17.0.200'}]
   StorageAllocationPools: [{'start': '172.18.0.10', 'end': '172.18.0.200'}]
   StorageMgmtAllocationPools: [{'start': '172.19.0.10', 'end': '172.19.0.200'}]
   TenantAllocationPools: [{'start': '172.16.0.10', 'end': '172.16.0.200'}]
-  # Leave room if the external network are also used for floating IPs
+  # Leave room if the external network is also used for floating IPs
   ExternalAllocationPools: [{'start': '10.0.0.10', 'end': '10.0.0.50'}]
   # Gateway router for the external network
   ExternalInterfaceDefaultRoute: 10.0.0.1
@@ -148,7 +150,7 @@ _parameter_defaults_ section needs to be customized for the local environment.
   NeutronExternalNetworkBridge: "''"
   # Customize bonding options
   BondInterfaceOvsOptions:
-      "bond_mode=balance-tcp lacp=active other-config:lacp-fallback-ab=true"
+      "bond_mode=4 lacp_rate=1 updelay=1000 miimon=100"
 ----
 
 === Configure IP Subnets
@@ -169,11 +171,12 @@ parameter_defaults:
   ExternalNetCidr: 10.0.0.0/24
   # CIDR subnet mask length for provisioning network
   ControlPlaneSubnetCidr: 24
+  # Customize the IP ranges on each network to use for static IPs and VIPs
   InternalApiAllocationPools: [{'start': '172.17.0.10', 'end': '172.17.0.200'}]
   StorageAllocationPools: [{'start': '172.18.0.10', 'end': '172.18.0.200'}]
   StorageMgmtAllocationPools: [{'start': '172.19.0.10', 'end': '172.19.0.200'}]
   TenantAllocationPools: [{'start': '172.16.0.10', 'end': '172.16.0.200'}]
-  # Make sure to leave room for floating IPs in external subnet
+  # Leave room if the external network is also used for floating IPs
   ExternalAllocationPools: [{'start': '10.0.0.10', 'end': '10.0.0.50'}]
   # Gateway router for the external network
   ExternalInterfaceDefaultRoute: 10.0.0.1
@@ -197,8 +200,8 @@ placed on a separate VLAN (which is configured by the operator post-deployment).
 
 It is important to make sure that there are no IP conflicts on the
 Provisioning network. Perform a port scan on the Provisioning network
-if you are not certain that the IPs used for discovery IP range and
-host IP range are free.
+using the _nmap_ command if you are not certain that the IPs used for
+discovery IP range and host IP range are free.
 
 NOTE: replace the network in the _nmap_ command with the IP subnet of
 the Provisioning network in CIDR bitmask notation.
@@ -245,7 +248,7 @@ set. These must be overridden to match the local environment.
 
   # Customize bonding options
   BondInterfaceOvsOptions:
-      "bond_mode=balance-tcp lacp=active other-config:lacp-fallback-ab=true"
+      "bond_mode=4 lacp_rate=1 updelay=1000 miimon=100"
 ----
 
 The VLANs must be customized to match the environment. The values
@@ -261,24 +264,63 @@ special use networks without consuming tenant VLANs. It is possible to add
 VXLAN capability to a network with a Tenant VLAN, but it is not possible to
 add a Tenant VLAN to an already deployed set of hosts.
 
-The _BondInterfaceOvsOptions_ parameter passes the options to Open
-vSwitch when setting up bonding (if used in the environment). The
-value above enables fault-tolerance and load balancing if the switch
-supports (and is configured to use) LACP bonding. If LACP cannot be
-established, the bond falls back to active/backup mode, with fault
-tolerance, but where only one link in the bond is used at a time.
+The _BondInterfaceOvsOptions_ parameter passes the options to configure
+when setting up bonding (if used in the environment). The
+value above enables fault-tolerance and load balancing using LACP bonds.
 
-The default bonding options tries to negotiate LACP, but falls back to
-active-backup if LACP cannot be established:
+When OVS bonds are used, the options will be slightly different.
 
 [subs=+quotes]
 ----
- "bond_mode=balance-tcp lacp=active other-config:lacp-fallback-ab=true"
+ "mode=802.3ad"
 ----
 
-This mode is safe to use without configuring the switches if active-backup mode is desired.
+LACP bonds require that the switch is configured to use LACP bonding. When
+configuring the switch, there are several settings that you need to keep in
+sync between the switch and the host. Set the timing to match on the host:
 
-If the switches do not support LACP, then do not configure a bond on the upstream switch. Instead, OVS can use _balance-slb_  mode to enable using two interfaces on the same VLAN as a bond:
+[subs=+quotes]
+----
+ "mode=802.3ad lacp_rate=[fast|slow]"
+----
+
+Any options which are valid for the Linux bonding kernel module may be used
+as well. Here are some additional settings which may be used with Linux
+bonding:
+
+[subs=+quotes]
+----
+# Set the time in milliseconds between checking carrier detection
+miimon=<time_in_milliseconds>
+
+# Set the timing for sending LACP packets to partner (1=fast, 0=slow)
+lacp_rate=[1|0]
+
+# Specifies the interface name, such as eth0, of the primary device. The
+# primary device is the first of the bonding interfaces to be used and is
+# not abandoned unless it fails. This setting is particularly useful when
+# one NIC in the bonding interface is faster and, therefore, able to handle
+# a bigger load. 
+primary=<interface_name>
+
+# Specify the number of milliseconds an interface must remain up before it
+# will be enabled (prevents enabling a flapping interface)
+updelay=<time_in_milliseconds>
+
+# Choose the transmit hash policy to determine which link to use. Valid
+# values are: layer2 or 0 — Default setting. This parameter uses the XOR
+# of hardware MAC addresses to generate the hash. layer3+4 or 1 — Uses
+# upper layer protocol information (when available) to generate the hash.
+# This allows for traffic to a particular network peer to span multiple
+# slaves, although a single connection will not span multiple slaves. 
+# layer2+3 or 2 — Uses a combination of layer2 and layer3 protocol
+# information to generate the hash. 
+xmit_hash_policy=<value>
+----
+
+If the switches do not support LACP, then do not configure a bond on the
+upstream switch. Instead, OVS can use _balance-slb_  mode to enable using
+two interfaces on the same VLAN as a bond:
 
 [subs=+quotes]
 ----
@@ -290,13 +332,11 @@ OVS balances traffic based on source MAC address and destination
 bond at a time, and OVS uses special filtering to prevent packet
 duplication across the links.
 
-In addition, the following options may be added to the options string to tune the bond:
+In addition, the following options may be added to the options string to
+tune the bond when using OVS:
 
 [subs=+quotes]
 ----
- # Set the LACP heartbeat to 1 second or 30 seconds (default)
- "other_config:lacp-time=[fast|slow]"
-
  # Set the link detection to use miimon heartbeats or monitor carrier (default)
   "other_config:bond-detect-mode=[miimon|carrier]"
 
@@ -308,6 +348,11 @@ In addition, the following options may be added to the options string to tune th
 ----
 
 If bonding is not used, these options are ignored.
+
+NOTE: When using bonding, the network interface configuration templates
+are where the bonding mode is set. Use "type: ovs_bond" to create an OVS
+bond, and use "type: linux_bond" to create a Linux bond. See the section
+on configuring NIC configuration templates for more information.
 
 === Optional: Modify the Service to Network Mapping
 
@@ -322,7 +367,7 @@ Here is the full set of service-to-net mappings, this can be included in the env
 
 [subs=+quotes]
 ----
- parameter_defaults:
+parameter_defaults:
   ServiceNetMap:
     NeutronTenantNetwork: tenant
     CeilometerApiNetwork: internal_api
@@ -331,7 +376,7 @@ Here is the full set of service-to-net mappings, this can be included in the env
     CinderIscsiNetwork: storage
     GlanceApiNetwork: storage
     GlanceRegistryNetwork: internal_api
-    KeystoneAdminApiNetwork: internal_api
+    KeystoneAdminApiNetwork: ctlplane # allows undercloud to config endpoints
     KeystonePublicApiNetwork: internal_api
     NeutronApiNetwork: internal_api
     HeatApiNetwork: internal_api
@@ -371,7 +416,7 @@ First, this is the complete set of networks and ports that can be deployed:
 
 [subs=+quotes]
 ----
- resource_registry
+resource_registry:
   # This section is usually not modified, if in doubt stick to the defaults
   # TripleO overcloud networks
   OS::TripleO::Network::External:
@@ -385,6 +430,14 @@ First, this is the complete set of networks and ports that can be deployed:
   OS::TripleO::Network::Tenant:
    /usr/share/openstack-tripleo-heat-templates/network/tenant.yaml
 
+  # Port assignments for the VIPs
+  OS::TripleO::Network::Ports::ExternalVipPort: ../network/ports/external.yaml
+  OS::TripleO::Network::Ports::InternalApiVipPort: ../network/ports/internal_api.yaml
+  OS::TripleO::Network::Ports::StorageVipPort: ../network/ports/storage.yaml
+  OS::TripleO::Network::Ports::StorageMgmtVipPort: ../network/ports/storage_mgmt.yaml
+  OS::TripleO::Network::Ports::TenantVipPort: ../network/ports/tenant.yaml
+  OS::TripleO::Network::Ports::RedisVipPort: ../network/ports/vip.yaml
+
   # Port assignments for the controller role
   OS::TripleO::Controller::Ports::ExternalPort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/external.yaml
@@ -396,9 +449,6 @@ First, this is the complete set of networks and ports that can be deployed:
     /usr/share/openstack-tripleo-heat-templates/network/ports/storage_mgmt.yaml
   OS::TripleO::Controller::Ports::TenantPort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/tenant.yaml
-  # Port assignment for the Redis VIP on isolated network
-  OS::TripleO::Controller::Ports::RedisVipPort:
-    /usr/share/openstack-tripleo-heat-templates/network/ports/vip.yaml
 
   # Port assignments for the compute role
   OS::TripleO::Compute::Ports::InternalApiPort:
@@ -455,12 +505,20 @@ resource_registry
     /usr/share/openstack-tripleo-heat-templates/network/external.yaml
   OS::TripleO::Network::InternalApi:
     /usr/share/openstack-tripleo-heat-templates/network/internal_api.yaml
-  *OS::TripleO::Network::StorageMgmt:
-    /usr/share/openstack-tripleo-heat-templates/network/noop.yaml*
+  OS::TripleO::Network::StorageMgmt:
+    /usr/share/openstack-tripleo-heat-templates/network/noop.yaml
   OS::TripleO::Network::Storage:
     /usr/share/openstack-tripleo-heat-templates/network/storage.yaml
   OS::TripleO::Network::Tenant:
    /usr/share/openstack-tripleo-heat-templates/network/tenant.yaml
+
+  # Port assignments for the VIPs
+  OS::TripleO::Network::Ports::ExternalVipPort: ../network/ports/external.yaml
+  OS::TripleO::Network::Ports::InternalApiVipPort: ../network/ports/internal_api.yaml
+  OS::TripleO::Network::Ports::StorageVipPort: ../network/ports/storage.yaml
+  OS::TripleO::Network::Ports::StorageMgmtVipPort: ../network/ports/noop.yaml
+  OS::TripleO::Network::Ports::TenantVipPort: ../network/ports/tenant.yaml
+  OS::TripleO::Network::Ports::RedisVipPort: ../network/ports/vip.yaml
 
   # Port assignments for the controller role
   OS::TripleO::Controller::Ports::ExternalPort:
@@ -469,13 +527,10 @@ resource_registry
     /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
   OS::TripleO::Controller::Ports::StoragePort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
-  *OS::TripleO::Controller::Ports::StorageMgmtPort:
-    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml*
+  OS::TripleO::Controller::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
   OS::TripleO::Controller::Ports::TenantPort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/tenant.yaml
-  # Port assignment for the Redis VIP on isolated network
-  OS::TripleO::Controller::Ports::RedisVipPort:
-    /usr/share/openstack-tripleo-heat-templates/network/ports/vip.yaml
 
   # Port assignments for the compute role
   OS::TripleO::Compute::Ports::InternalApiPort:
@@ -488,24 +543,24 @@ resource_registry
   # Port assignments for the ceph storage role
   OS::TripleO::CephStorage::Ports::StoragePort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
-  *OS::TripleO::CephStorage::Ports::StorageMgmtPort:
-    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml*
+  OS::TripleO::CephStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
 
   # Port assignments for the swift storage role
   OS::TripleO::SwiftStorage::Ports::InternalApiPort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
   OS::TripleO::SwiftStorage::Ports::StoragePort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
-  *OS::TripleO::SwiftStorage::Ports::StorageMgmtPort:
-    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml*
+  OS::TripleO::SwiftStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
 
   # Port assignments for the block storage role
   OS::TripleO::BlockStorage::Ports::InternalApiPort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/internal_api.yaml
   OS::TripleO::BlockStorage::Ports::StoragePort:
     /usr/share/openstack-tripleo-heat-templates/network/ports/storage.yaml
-  *OS::TripleO::BlockStorage::Ports::StorageMgmtPort:
-    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml*
+  OS::TripleO::BlockStorage::Ports::StorageMgmtPort:
+    /usr/share/openstack-tripleo-heat-templates/network/ports/noop.yaml
 
  parameter_defaults:
   ServiceNetMap:
@@ -577,7 +632,7 @@ more data NICs in addition to IPMI):
 
 [subs=+quotes]
 ----
- $ *mkdir ~/net-configs*
+ $ *mkdir ~/templates/net-configs*
  $ *export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates*
  $ *cp $TEMPLATE_DIR/network/config/bond-with-vlans/ ~/templates/net-configs*
 ----
@@ -586,7 +641,7 @@ Another set of examples for systems with a single or dual data NIC is in _single
 
 [subs=+quotes]
 ----
- $ *mkdir ~/net-configs*
+ $ *mkdir ~/templates/net-configs*
  $ *export TEMPLATE_DIR=/usr/share/openstack-tripleo-heat-templates*
  $ *cp $TEMPLATE_DIR/network/config/single-nic-vlans/ ~/templates/net-configs*
 ----
@@ -638,9 +693,8 @@ parameters:
     type: string
   BondInterfaceOvsOptions:
     default: ''
-    description: The ovs_options string for the bond interface. Set things
-                 like lacp=active and/or bond_mode=balance-slb using this
-                  option.
+    description: The ovs_options string for the bond interface. Set things like
+                 lacp=active and/or bond_mode=balance-slb using this option.
     type: string
   ExternalNetworkVlanID:
     default: 10
@@ -672,7 +726,7 @@ parameters:
     type: string
   DnsServers: # Override this via parameter_defaults
     default: []
-    description: A list of DNS servers (2 max) to add to resolv.conf.
+    description: A list of DNS servers (2 max for some implementations) that will be added to resolv.conf.
     type: json
   EC2MetadataIp: # Override this via parameter_defaults
     description: The IP address of the EC2 metadata server.
@@ -686,6 +740,21 @@ resources:
       config:
         os_net_config:
           network_config:
+            -
+              type: interface
+              name: nic1
+              use_dhcp: false
+              addresses:
+                -
+                  ip_netmask:
+                    list_join:
+                      - '/'
+                      - - {get_param: ControlPlaneIp}
+                        - {get_param: ControlPlaneSubnetCidr}
+              routes:
+                -
+                  ip_netmask: 169.254.169.254/32
+                  next_hop: {get_param: EC2MetadataIp}
             -
               type: ovs_bridge
               name: {get_input: bridge_name}
@@ -739,7 +808,6 @@ resources:
                   type: vlan
                   device: bond1
                   vlan_id: {get_param: TenantNetworkVlanID}
-                  addresses:
                   addresses:
                   -
                     ip_netmask: {get_param: TenantIpSubnet}
@@ -796,33 +864,54 @@ interface is using DHCP, and the DHCP server offers a gateway address,
 the system installs a default route for that gateway. Otherwise, a
 default route may be set manually on an interface with a static IP.
 
-Although the Linux kernel supports multiple default gateways, it only
-uses the one with the lowest metric. If there are multiple DHCP
-interfaces, this can result in an unpredictable default gateway. In
-this case, it is recommended that _defroute=no_ be set for the
-interfaces other than the one where we want the default route. In this
-case, we want a DHCP interface (NIC 2) to be the default route (rather
-than the Provisioning interface), so we disable the default route on
-the provisioning interface. Note that the defroute parameter only
-applies to routes learned via DHCP.
+The default route is generally set on the External network for
+Controller nodes, and on the Control Plane (Provisioning) interface on
+compute and storage nodes.
 
 [subs=+quotes]
 ----
-    *# No default route on the Provisioning network*
+                # Controller default route
+                -
+                  type: vlan
+                  device: bond1
+                  vlan_id: {get_param: ExternalNetworkVlanID}
+                  addresses:
+                    -
+                      ip_netmask: {get_param: ExternalIpSubnet}
+                  routes:
+                    *-*
+                      *ip_netmask: 0.0.0.0/0*
+                      *next_hop: {get_param: ExternalInterfaceDefaultRoute}*
+----
+
+[subs=+quotes]
+----
+            # Compute node default route
             -
               type: interface
               name: nic1
-              use_dhcp: true
-              *defroute: no*
-            *# Instead use this DHCP infrastructure VLAN as the
-            default route*
-            *-*
-              *type: interface*
-              *name: nic2*
-              *use_dhcp: true*
+              use_dhcp: false
+              dns_servers: {get_param: DnsServers}
+              addresses:
+                -
+                  ip_netmask:
+                    list_join:
+                      - '/'
+                      - - {get_param: ControlPlaneIp}
+                        - {get_param: ControlPlaneSubnetCidr}
+              routes:
+                -
+                  ip_netmask: 169.254.169.254/32
+                  next_hop: {get_param: EC2MetadataIp}
+                *-*
+                  *default: true*
+                  *next_hop: {get_param: ControlPlaneDefaultRoute}*
 ----
 
-By default, {ro} director 7.1 uses static IP addressing on all interfaces. To set a static route on an interface with a static IP, specify a route to the subnet. For instance, here is a hypothetical route to the 10.1.2.0/24 subnet via the gateway at 172.17.0.1 on the Internal API network:
+By default, {ro} 7.1 and above uses static IP addressing on all interfaces.
+To set a static route on an interface with a static IP, specify a route to
+the subnet. For instance, here is a hypothetical route to the 10.1.2.0/24
+subnet via the gateway at 172.17.0.1 on the Internal API network:
 
 [subs=+quotes]
 ----
@@ -841,7 +930,11 @@ By default, {ro} director 7.1 uses static IP addressing on all interfaces. To se
 
 ==== Using the Native VLAN for Floating IPs
 
-{ro} 7 configures Neutron with an empty string for the Neutron external bridge mapping. This results in the physical interface being patched to br-int,rather than using br-ex directly (as in previous versions). This model allows for multiple floating IP networks, using either VLANs or multiple physical connections.
+{ro} 7 configures Neutron with an empty string for the Neutron external
+bridge mapping. This results in the physical interface being patched to
+br-int, rather than using br-ex directly (as in previous versions).
+This model allows for multiple floating IP networks, using either VLANs
+or multiple physical connections.
 
 [subs=+quotes]
 ----
@@ -849,7 +942,11 @@ By default, {ro} director 7.1 uses static IP addressing on all interfaces. To se
     NeutronExternalNetworkBridge: "''"
 ----
 
-When using only one floating IP network on the native VLAN of a bridge, then you can optionally set the Neutron external bridge to e.g. "br-ex". This results in the packets only having to traverse one bridge (instead of two), and may result in slightly lower CPU when passing traffic over the floating IP network.
+When using only one floating IP network on the native VLAN of a bridge, then
+you can optionally set the Neutron external bridge to e.g. "br-ex". This
+results in the packets only having to traverse one bridge (instead of two),
+and may result in slightly lower CPU when passing traffic over the floating
+IP network.
 
 [subs=+quotes]
 ----
@@ -857,7 +954,9 @@ When using only one floating IP network on the native VLAN of a bridge, then you
     NeutronExternalNetworkBridge: "'br-ex'"
 ----
 
-The next section contains the changes to the NIC config that need to happen to put the External network on the native VLAN (the External network may be used for floating IPs in addition to the Horizon dashboard and Public APIs).
+The next section contains the changes to the NIC config that need to happen
+to put the External network on the native VLAN (the External network may be
+used for floating IPs in addition to the Horizon dashboard and Public APIs).
 
 ==== Using the Native VLAN on a Trunked Interface
 
@@ -867,13 +966,15 @@ no VLAN interface. If the native VLAN is used for the External
 network, make sure to set the _NeutronExternalNetworkBridge_ parameters
 to *"br-ex"* instead of *"''"* in the _network-environment.yaml_.
 
-For example, if the external network is on the native VLAN, the bond configuration would look like this:
+For example, if the external network is on the native VLAN, the bond
+configuration would look like this:
 
 [subs=+quotes]
 ----
     network_config:
               -
                 type: ovs_bridge
+                dns_servers: {get_param: DnsServers}
                 name: {get_input: bridge_name}
                 addresses:
                   -
@@ -923,7 +1024,7 @@ of 1500. Traffic which crosses a router border is limited to an MTU of
 
 [subs=+quotes]
 ----
-    -
+                  -
                     type: ovs_bond
                     name: bond1
                     *mtu: 9000*
@@ -951,8 +1052,7 @@ of 1500. Traffic which crosses a router border is limited to an MTU of
                         ip_netmask: 0.0.0.0/0
                         next_hop: {get_param: ExternalInterfaceDefaultRoute}
                   -
-                    *# MTU 9000 for Internal API, Storage, and Storage
-                    MGMT*
+                    *# MTU 9000 for Internal API, Storage, and Storage MGMT*
                     type: vlan
                     device: bond1
                     *mtu: 9000*
@@ -1100,6 +1200,65 @@ Here are the changes required for the compute and storage roles:
                 -
                   *default: true*
                   *next_hop: {get_param: ControlPlaneDefaultRoute}*
+----
+
+==== Changes to Network Configuration in {ro} Director 7.2
+The 7.2 version of {ro} director supports Linux kernel-mode bonding
+and Linux bridges. The syntax for using Linux bonds and bridges is
+very similar to their OVS counterparts. Linux bridges are rarely
+used, and most deployments use OVS bridges. Linux bonds, on the
+other hand, are quite common, and are the recommended mode when
+using LACP bonding.
+
+To use Linux Bridges rather than OVS bridges, simply change
+"type: ovs_bridge" to "type: linux_bridge" in the NIC configurations.
+To use Linux bonds instead of OVS bonds, replace "type: ovs_bond" with
+"type: linux_bond", and replace "ovs_options" with "bonding_options".
+Here is a comparison of the OVS LACP bonds used in {ro} 7.0 and the
+newer-style Linux LACP bonds in version 7.2:
+
+[subs=+quotes]
+----
+# Original OVS bond
+-
+  type: ovs_bridge
+  name: {get_input: bridge_name}
+  dns_servers: {get_param: DnsServers}
+  members:
+    -
+      type: ovs_bond
+      name: bond1
+      ovs_options: {get_param: BondInterfaceOvsOptions}
+      members:
+        -
+          type: interface
+          name: nic2
+          primary: true
+        -
+          type: interface
+          name: nic3
+----
+
+[subs=+quotes]
+----
+# Original OVS bond
+-
+  type: ovs_bridge
+  name: {get_input: bridge_name}
+  dns_servers: {get_param: DnsServers}
+  members:
+    -
+      *type: linux_bond*
+      name: bond1
+      *bonding_options: {get_param: BondInterfaceOvsOptions}*
+      members:
+        -
+          type: interface
+          name: nic2
+          primary: true
+        -
+          type: interface
+          name: nic3
 ----
 
 === Deploying the Overcloud with Network Isolation
