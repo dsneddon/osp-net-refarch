@@ -19,6 +19,14 @@ efficient way to connect multiple racks of servers, since it would
 require interconnects between each and every top-of-rack switch if
 there were no spine.
 
+Traditional datacenter architecture uses VLANs to segment datacenter
+traffic, generally extending VLANs to multiple physical racks, depending
+on where the servers are located. Recently some datacenters have moved
+to a routed network model, where VLANs are local to the physical rack,
+and routers are used to forward packets between racks. Current versions
+of {ro} use a traditional model, so VLANs are shared among
+all nodes in a single OpenStack deployment.
+
 [[image-leaf-and-spine]]
 .image-leaf-and-spine
 image::images/ra_ospnet_4.png[caption="Figure 3.1: " title="Leaf and Spine Topology with Shared L2 VLANs" align="center"]
@@ -72,8 +80,9 @@ There are two places where bonding is useful in an OpenStack
 deployment: the links between Ethernet switches, and the links between
 Ethernet switches and hosts.
 
-Bonding support in OSP 7 is provided by Open vSwitch. Here are the
-bonding methods supported by OVS:
+Previous versions of {ro} supported bonding using Open vSwitch bonds.
+Current versions add Linux bonding support. Open vSwitch is supported
+for the following bonding modes:
 
 [glossary]
 *active-backup*::
@@ -84,18 +93,43 @@ bonding methods supported by OVS:
 *balance-slb*::
   This mode uses a simple hashing algorithm based on source MAC address
   and VLAN number, with periodic rebalancing as traffic patterns change.
-  This mode is similar to "mode 2" bonds used by the Linux bonding
-  driver. This mode is used when the switch is configured with bonding
-  but is not configured to use LACP ("static" instead of "dynamic"
-  bonds).
-*balance-tcp*::
-  This mode balances the load based on layer 2 through layer 4 data
-  such as destination MAC address, IP address, and TCP port. This mode
-  requires that LACP be configured on the switch. This mode is similar
-  to "mode 4" bonds used by the Linux bonding driver. This mode is
-  recommended when possible, because LACP provides the most resiliency
-  for detecting link failures and provides additional diagnostic
-  information about the bond.
+  This mode is similar to "mode 5" bonds used by the Linux bonding
+  driver, but instead of a single slave being active for all traffic,
+  VLANs are assigned to slaves according to load. The VLAN assignments
+  are peridically rebalanced to even out the load. Note that some
+  switches will detect this rebalancing as flapping, and require that
+  rebalancing be turned off when using balance-slb mode.
+
+NOTE: The "balance-tcp" mode of Open vSwitch is no longer supported.
+LACP mode bonds are only supported using Linux bonding mode. Operators
+who are currently using LACP bonds with OVS should be aware that OVS
+bonds using LACP have been observed to experience packet loss at scale.
+
+The following modes are supported using Linux bonding:
+
+[glossary]
+*active-backup* or mode=1::
+  This mode provides fault-tolerance in the event that a link or switch
+  goes down. This mode does not require any special switch support or
+  configuration, and works when the links are connected to separate
+  switches. This mode does not provide load balancing.
+*802.3ad* or mode=4::
+  This mode uses the Link Aggregation Control Protocol (LACP) to
+  negotiate a bond between the host and the Ethernet switch. This mode
+  requires switch support and configuration. It only works when all links
+  are connected to one switch, or if the switches are clustered using
+  virtual chassis technology. This mode provides the highest levels of
+  fault-tolerance and load-balancing, but must be tested to ensure that
+  the timers are set correctly on both sides, and that the links are
+  negotiated properly when first deployed. When an LACP bond is used with
+  the provisioning network, the switch must support falling back to a
+  normal, unbonded link for PXE boot support.
+*balance-tlb* or mode=5::
+  This mode provides fault tolerance in the event that a link or switch
+  goes down. This mode does not require any special switch support or
+  configuration, and works when the links are connected to separate
+  switches. This mode provides load balancing in the upstream direction,
+  but traffic is always received over a single link.
 
 === High Availability Chassis Network Equipment
 

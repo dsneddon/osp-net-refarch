@@ -1,6 +1,6 @@
 = High Availability Network Architecture: with Red Hat Enterprise Linux OpenStack Platform 7 Updated for OSP-Director 7.1
 Dan Sneddon <dnseddon@redhat.com>
-v1.3, October 20, 2015
+v1.5, January 27, 2016
 :description: Reference architecture
 :doctype: book
 :title-logo-image: image:images/rh-ra-banner.jpg[scaledwidth=70%,align=center]
@@ -14,7 +14,7 @@ v1.3, October 20, 2015
 :eap: Red Hat JBoss Enterprise Application Platform
 :eapver: Red Hat JBoss Enterprise Application Platform 6
 :osp: Red Hat Enterprise Linux OpenStack Platform
-:ospver: Red Hat Enterprise Linux OpenStack Platform 7.0.1
+:ospver: Red Hat Enterprise Linux OpenStack Platform 7.0.3
 :rhel: Red Hat Enterprise Linux
 :rhss: Red Hat Satellite Server
 :ro: RHEL-OSP
