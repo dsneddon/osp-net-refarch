@@ -247,10 +247,13 @@ In order to use provider networks, the interface to the network will have to be 
 ----
 
 ===== Creating Provider Network Bridge Manually
+Typically the provider network bridge should be added to the NIC configuration
+templates, so that the bridges will be created at deployment time.
 
 If the bridges were not created at deployment time, then create the
-bridges that were referenced in the _ovs_neutron_plugin.ini_ file on the controllers and compute hosts.
-To add a VLAN interface that is trunked to the host via bond2, add the bond2 interface:
+bridges that were referenced in the _ovs_neutron_plugin.ini_ file on the
+controllers and compute hosts. To add a VLAN interface that is trunked to the
+host via bond2, add the bond2 interface:
 
 [subs=+quotes]
 ----
@@ -266,11 +269,15 @@ Alternately, to add a physical interface eth3 with a flat network:
  # ovs-vsctl add-port br-trunk eth3
 ----
 
-At this point the Neutron services will have to be restarted on all controllers and compute hosts. If making the changes on an HA deployment, restart only one controller at a time and wait for it to rejoin the cluster before restarting the services on the next server.
+At this point the Neutron services will have to be restarted on all controllers
+and compute hosts. If making the changes on an HA deployment, restart only one
+controller at a time and wait for it to rejoin the cluster before restarting
+the services on the next server.
 
 ===== Validating Bridge Mapping
 
-Neutron should be aware of all the bridge mappings on all compute hosts. To validate this, use the Neutron commands to show each compute host:
+Neutron should be aware of all the bridge mappings on all compute hosts. To
+validate this, use the Neutron commands to show each compute host:
 
 [subs=+quotes]
 ----
@@ -289,7 +296,8 @@ You should see this in the data returned by the _agent-show_ command:
 
 ===== Creating Provider Networks In Neutron
 
-Now the provider network(s) must be mapped to Neutron networks so that they can be assigned to VM instances.
+Now the provider network(s) must be mapped to Neutron networks so that they
+can be assigned to VM instances.
 
 To create a Neutron network for a VLAN interface on VLAN 201:
 
@@ -300,7 +308,8 @@ To create a Neutron network for a VLAN interface on VLAN 201:
 --shared vlan201_network*
 ----
 
-This creates a Neutron network named “vlan201_network” that maps to the physical network physnet-trunk using VLAN 201.
+This creates a Neutron network named “vlan201_network” that maps to the physical
+network physnet-trunk using VLAN 201.
 
 To create a Neutron network for a flat interface:
 
@@ -315,7 +324,8 @@ to the physical network bridge _physnet-trunk_ but uses no VLAN tagging.
 
 ===== Associate a Subnet With A Provider Network
 
-Finally, a subnet must be assigned to the provider network. This can be done for the VLAN interface in the example above using this command:
+Finally, a subnet must be assigned to the provider network. This can be done for
+the VLAN interface in the example above using this command:
 
 [subs=+quotes]
 ----
@@ -324,7 +334,11 @@ Finally, a subnet must be assigned to the provider network. This can be done for
 
 ==== Launching VMs
 
-The VMs used for testing in this reference architecture were Fedora 20 x86_64 running inside m1.small KVM profiles. The Compute hosts were idle except for the test VM images, and there was no oversubscription of memory or CPU resources. VMs were launched from Horizon and used the default security group, with the addition of allowing incoming SSH.
+The VMs used for testing in this reference architecture were Fedora x86_64
+running inside m1.small KVM profiles. The Compute hosts were idle except for
+the test VM images, and there was no oversubscription of memory or CPU
+resources. VMs were launched from Horizon and used the default security group,
+with the addition of allowing incoming SSH.
 
 When launching a VM, Neutron networks can be assigned to virtual NICs
 on the VM. Typically the network attached to NIC 1 provides DHCP
@@ -334,7 +348,8 @@ infrastructure DHCP services on that network.
 
 [[image-net-horizon]]
 .image-net-horizon
-image::images/ra_ospnet_8.png[caption="Figure 5.1: " title="Selecting Networks for VM in Horizon" align="center"]
+image::images/ra_ospnet_8.png[caption="Figure 5.1: " title="Selecting Networks
+for VM in Horizon" align="center"]
 
 ==== Floating IPs
 
@@ -355,7 +370,8 @@ the Floating IPs are to be accessible from the Internet, public IP
 addresses must be used on the External network and a public IP must be
 assigned to the Neutron router. In Figure 5.2 the Tenant1_router is
 attached to both the _External_ network and the _Tenant_External_
-network, and provides Floating IPs in the 10.1.247.64/27 range for the pictured VMs.
+network, and provides Floating IPs in the 10.1.247.64/27 range for the pictured
+VMs.
 
 [[image-ra-net]]
 .image-ra-net
