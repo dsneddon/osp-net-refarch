@@ -160,19 +160,22 @@ In _/etc/nova/nova.conf_, edit or create this line:
 
 [subs=+quotes]
 ----
- network_device_mtu=8950
+ network_device_mtu = 8950
 ----
 
-In _/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini_:
+In _/etc/neutron/neutron.conf_, edit or create this line:
 
 [subs=+quotes]
 ----
- veth_mtu = 8950
+ network_device_mtu = 8950
 ----
 
-NOTE:  When the MTU is modified in Nova and Neutron, the services must be restarted for the settings to take effect. The settings only apply to VMs started after the services have been restarted.
+NOTE:  When the MTU is modified in Nova and Neutron, the services must be
+restarted for the settings to take effect. The settings only apply to VMs
+started after the services have been restarted.
 
-Furthermore, the MTU on the VM image should be set to the same value, which can be done manually with the following command:
+Furthermore, the MTU on the VM image should be set to the same value, which
+can be done manually with the following command:
 
 [subs=+quotes]
 ----
@@ -189,18 +192,32 @@ _/etc/neutron/dnsmasq-neutron.conf_ on all controllers:
  dhcp-option-force=26,8950
 ----
 
-After making this change, restart the _neutron-dhcp-agent_ process on all controllers.
+After making this change, restart the _neutron-dhcp-agent_ process on all
+controllers.
 
 ==== Configuring Provider Networks
-Provider networks are networks that are attached directly to compute hosts, but traffic is not routed through the Neutron controller. Instead, provider networks are a way to attach a VM directly to a flat or VLAN network that is a part of the datacenter network. This is often how external access is provided, rather than using floating IPs on a Neutron controller. Provider networks and Neutron tenant networks can both be used simultaneously.
+Provider networks are networks that are attached directly to compute hosts,
+but traffic is not routed through the Neutron controller. Instead, provider
+networks are a way to attach a VM directly to a flat or VLAN network that is
+a part of the datacenter network. This is often how external access is
+provided, rather than using floating IPs on a Neutron controller. Provider
+networks and Neutron tenant networks can both be used simultaneously.
 
-Provider networks can only be configured by an administrator, but they appear as normal Neutron networks to the client. This allows them to be selected by a tenant when launching a VM.
+Provider networks can only be configured by an administrator, but they appear
+as normal Neutron networks to the client. This allows them to be selected by a
+tenant when launching a VM.
 
-Provider networks do not require the use of the L3 Agent, because the traffic is not routed through the Neutron controller. Generally Neutron will provide DHCP services on provider networks. Ordinarily, metadata services are provided by a redirect on the L3 Agent, but another mechanism is provided below for metadata services on provider networks.
+Provider networks do not require the use of the L3 Agent, because the traffic is
+not routed through the Neutron controller. Generally Neutron will provide DHCP
+services on provider networks. Ordinarily, metadata services are provided by a
+redirect on the L3 Agent, but another mechanism is provided below for metadata
+services on provider networks.
 
 ===== Configuring Neutron For Provider Networks
 
-Neutron maps provider networks to a bridge, and maps that bridge to a physical adapter or VLAN interface. These mappings must be made in the _ovs_neutron_plugin.ini_ file on the controllers and compute hosts:
+Neutron maps provider networks to a bridge, and maps that bridge to a physical
+adapter or VLAN interface. These mappings must be made in the
+_ovs_neutron_plugin.ini_ file on the controllers and compute hosts:
 
 [subs=+quotes]
 ----
