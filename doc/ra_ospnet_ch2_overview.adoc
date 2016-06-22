@@ -32,45 +32,57 @@ fast pace of OpenStack development without risking the stability and
 supportability of their production environments.
 
 ==== {ospver}
-{ospver} ({ro} 7) is based on
+{ospver} ({ro}) is based on
 the upstream “Kilo” OpenStack release. {ospver}
 is Red Hat’s seventh release of the OpenStack
 Platform. The first release was based on the “Essex” OpenStack
-release. {ro} 7 contains many new features delivered with Juno, as
+release. {ro} contains many new features delivered with Juno, as
 well as the additional hardening, stability, and functionality by
 validating upstream bugs, as well as integration with other Red Hat
 products, and comprehensive documentation.
 
 Minimum requirements for server hardware for {osp}:
 
-Controller nodes
+Undercloud node:
+
+* 64-bit x86 processor with support for the Intel 64 or AMD64 CPU
+  extensions.
+* A minimum of 16 GB of RAM.
+* A minimum of 40GB available disk space, and more is recommended.
+* 2 x 1 Gbps network interface cards, however it is recommended to
+use a 10Gb interface for provisioning, especially if provisioning a
+large number of nodes.
+
+Controller nodes:
 
 * 64-bit x86 processor with support for the Intel 64 or AMD64 CPU
 extensions.
-* A minimum of 4 GB of RAM is recommended.
-* A minimum of 40 GB of available disk space is recommended, and more
-for nodes providing block storage services. See documentation for more
-details.
-* 2 x 1 Gbps (or 2 x 10 Gbps) network interface cards.
+* A minimum of 32 GB of RAM is recommended, 64 GB of RAM is recommended
+for optimum performance.
+* A minimum of 40 GB of available disk space.
+* 2 x 1 Gbps (or 2 x 10 Gbps) network interface cards. Use additional
+ports for bonding or additional bandwidth.
 * Intelligent Platform Management Interface (IPMI) functionality on
 motherboard.
 
-Compute nodes
+Compute nodes:
 
 * 64-bit x86 processor with support for the Intel 64 or AMD64 CPU
 extensions, and the AMD-V or Intel VT hardware virtualization
 extensions enabled.
-* A minimum of 2 GB of RAM is recommended.
-* A minimum of 40 GB of available disk space is recommended.
+* A minimum of 6 GB of RAM is recommended.
+* A minimum of 40 GB of available disk space.
 * 2 x 1 Gbps (or 2 x 10 Gbps) network interface cards.
 * Intelligent Platform Management Interface (IPMI) functionality on
 motherboard.
 
-Ceph nodes
+Ceph nodes:
 
 * 64-bit x86 processor with support for the Intel 64 or AMD64 CPU
 extensions, and the AMD-V or Intel VT hardware virtualization
 extensions enabled.
+* Memory requirements depend on the amount of storage space.
+ Ideally, use at minimum 1 GB of memory per 1 TB of hard disk space.
 * A minimum of 1 GB of RAM per 1 TB of hard disk storage space is
 recommended.
 * Storage space depends on memory. Ideally, use at minimum 1 GB of
@@ -81,7 +93,7 @@ motherboard.
 
 === Network Architecture
 
-This section introduces the basic network architecture of {ro} 7.
+This section introduces the basic network architecture of {ro}.
 The installation is now performed using OpenStack on OpenStack (OoO or
 “TripleO”) to deploy the production cloud.  The installation server
 (or servers) is running a self-contained instance of OpenStack
@@ -158,8 +170,9 @@ servers must be connected to the Provisioning network.
 NOTE: In a standard deployment, the Undercloud server runs DHCP and
 TFTP services in order to PXE boot the Overcloud nodes. The TFTP
 protocol has no concept of security, and the server may be a security
-risk if left exposed. This network should be isolated or otherwise
-secured in production deployments.
+risk if left exposed. The Provisioning network should be protected by
+an access control list (ACL) or otherwise secured in production
+deployments.
 
 When servers are provisioned, Puppet configures the
 OpenStack services. All nodes must be connected to the Provisioning
@@ -175,6 +188,9 @@ For production deployments, there are advantages to dividing the
 Overcloud into several network segments. This allows the network
 traffic to be distributed between interfaces or bonds. It also
 prevents mixing control traffic and data traffic in the same network.
+
+NOTE: Isolating different kinds of traffic may be required for regulatory
+governance compliance such as PCI-DSS security guidelines.
 
 [glossary]
 *Provisioning Network*::
@@ -196,14 +212,18 @@ prevents mixing control traffic and data traffic in the same network.
   database. The Glance Registry API uses this network, as does the
   Cinder API. This network is typically only reachable from inside the
   OpenStack Overcloud environment, so API calls from outside the cloud
-  use the Public APIs.
-*Tenant Network*::
-  This network is used for connectivity for VMs. A
-  single network VLAN is used when Neutron is using VXLAN or GRE
-  tunneling mode. When using VLAN mode, however, a range of VLANs must
-  be set aside for tenant networks. These VLANs should not be in use for
-  any other purpose. Neutron assigns the VLANs to a VM based on
-  which tenant networks are assigned to the VM.
+  use the Public APIs. In a large deployment, the Internal API network
+  carries a lot of control traffic, so sufficient bandwidth should be
+  provided, especially on controller nodes.
+*Tenant (Tunneling) Network*::
+  This network is used for tunnel connectivity for VMs when using VXLAN
+  or GRE. A single network VLAN is used when Neutron is using VXLAN or GRE
+  tunneling mode. We recommend that operators include this network
+  even when using tenant VLANs in order to provide flexibility for
+  the operator to create test networks. VXLAN or GRE may also be used
+  as a secondary source of tenant networks that will only be used if the
+  range of tenant VLANs is exhausted. This prevents accidental denial of
+  service if the range of VLANs is limited.
 *Storage Network*::
   This network hosts the data traffic for object and
   block storage. Cinder iSCSI connections are made on the Storage
@@ -230,6 +250,21 @@ prevents mixing control traffic and data traffic in the same network.
   are attached to this interface. The range of IPs that are assigned to
   floating IPs should not include the IPs used for hosts and VIPs on
   this network.
+*Management Network*::
+  This is an optional network which may be enabled at deploymet time.
+  The Management network may be used for out-of-band management via
+  an SSH server which is also attached to the Management network. This
+  network can also be used as a default route for non-controller nodes
+  if the Provisioning network is isolated and not routed externally.
+  Since no OpenStack services run on this network, it may also be used
+  as an auxiliary network if an additional network is required.
+*Tenant VLANs*::
+  When using VLAN mode tenant networking, a range of VLANs must
+  be set aside for tenant networks. These VLANs should not be in use for
+  any other purpose. Neutron assigns the VLANs to a VM based on
+  which tenant networks are assigned to the VM. The entire range
+  of tenant VLANs must be trunked to an interface on a bridge on every
+  compute node and controller in order to attach VMs and routers.
 
 ==== Network VLAN Requirements
 The networks used are on separate VLANs. In a typical OpenStack
@@ -278,7 +313,9 @@ The following network traffic types are used in {osp}:
 |Storage||XXX|XXX|XXX
 |Storage Management|||XXX|
 |External|||XXX|
-|Installer External Uplink|XXX||
+|Management|Opt|Opt|Opt|Opt
+|Tenant VLANs||XXX|XXX|
+|Installer External Uplink|XXX|||
 |====
 
 ==== Example Physical Network Interface Assignment
@@ -355,7 +392,7 @@ available at https://access.redhat.com/certifications.
 Neutron supports functionality through plugins, and a variety of
 hardware and software vendors supply plugins to support
 networking models that require their hardware or software.
-Cisco, Arista, Big Switch, PLUMGrid, Mellanox, VMWare, Nuage,
+Contrail, Cisco, Big Switch, Nuage, PLUMGrid, Mellanox, VMWare,
 and others provide and support these plugins. As such, these
 plugins are not covered in this document.
 
@@ -366,7 +403,7 @@ for OpenStack, and most are enabled with a plugin to Neutron
 that offloads the management and operation of the network
 functions to software controllers, or a combination of software
 and hardware. Some of these solutions are open-source, such as
-Open Contrail, MidoNet, or OpenDaylight. Others are proprietary
+OVN, Open Daylight, Open Contrail, or MidoNet. Others are proprietary
 commercial solutions, such as VMware NSX, or PLUMGrid. Using SDN
 significantly changes the desired network architecture, and
 introduces one or more controllers to manage overlay networks.
@@ -386,12 +423,13 @@ through the use of plug-ins.
 
 ====  Neutron Server
 
-This service runs on the Network nodes (non HA), or the
-Controller nodes (HA) to service the Network Service API and its
-extensions. It enforces the network model and IP addressing of
-each port. The neutron-server and plugin agents require access
-to a database for persistent storage and access to a message
-queue for inter-communication.
+The Neutron services run on the Controller nodes (HA) to service the
+Network Service API and its extensions. The network state is
+stored in the database. Management of resources is done through the
+API. Communication with agents running on Compute nodes is done
+through RPC via the message queue. Neutron uses Keystone for
+authentication. Neutron and Nova resources are linked, so that
+network resources can be associated with VMs.
 
 ====  Neutron Plugin Architecture
 
@@ -435,7 +473,7 @@ https://access.redhat.com/certifications.
   These plugins provide additional services,
   such as external gateway connectivity, firewall, load balancer,
   and other services. In this reference architecture the L3 Router
-  service plugin is used.
+  service plugin is used, but other service plugins are not covered.
 
 ===== Additional Neutron Plugins From Other Sources
 
