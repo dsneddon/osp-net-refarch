@@ -3,11 +3,14 @@
 
 === Configure Neutron Networks
 
-Before launching any virtual machines, it is necessary to configure the virtual infrastructure, including networks that the VMs use. This section describes the configuration of Neutron networks for the OpenStack deployment.
+Before launching any virtual machines, it is necessary to configure the virtual
+infrastructure, including networks that the VMs use. This section describes the
+configuration of Neutron networks for the OpenStack deployment.
 
 ==== Create Tenant Networks and Subnets
 
-Tenant networks can be created using Horizon. If no gateway is specified, the first IP address on the network is used as the gateway.
+Tenant networks can be created using Horizon. If no gateway is specified, the
+first IP address on the network is used as the gateway.
 
 Here are the networks that were created for this reference architecture:
 
@@ -19,7 +22,14 @@ Here are the networks that were created for this reference architecture:
 |ext-net|10.8.148.0/24|10.8.148.254
 |====
 
-External networks must be created to enable access outside the cloud. This is usually done on the command line of the Undercloud using the Overcloud credentials (run "source overcloudrc"). The Neutron router on the external network is connected to both the Public network and the External network(s), and performs many-to-one source NAT for VMs without Floating IPs as well as 1:1 NAT for VMs with Floating IPs. Horizon does not support creating external networks, so they can be created on the command-line with this command (assuming the floating IPs are on the bridge mapped to "datacentre"):
+External networks must be created to enable access outside the cloud. This is
+usually done on the command line of the Undercloud using the Overcloud credentials
+(run "source overcloudrc"). The Neutron router on the external network is connected
+to both the Public network and the External network(s), and performs many-to-one
+source NAT for VMs without Floating IPs as well as 1:1 NAT for VMs with Floating
+IPs. Horizon does not support creating external networks, so they can be created
+on the command-line with this command (assuming the floating IPs are on the bridge
+mapped to "datacentre"):
 
 [subs=+quotes]
 ----
@@ -33,7 +43,8 @@ NOTE: It is recommended that the Floating IP networks be implemented
 as VLANs as in the above command, because this allows for multiple
 Floating IP networks and/or multiple Provider External networks. If,
 however, the native VLAN is used on a link to provide floating IPs,
-then the following command creates the floating IP network directly on the bridge with no VLAN ID:
+then the following command creates the floating IP network directly on the
+bridge with no VLAN ID:
 
 [subs=+quotes]
 ----
@@ -128,86 +139,36 @@ _neutron router-interface-add_ command.
 [[configure_mtu]]
 ==== Configure MTU
 
-The Ethernet Maximum Transmission Unit (MTU) specifies the maximum
-amount of data that can be transmitted in a single Ethernet frame.
-Configuring the correct MTU everywhere can optimize performance,
-particularly when using high speed Ethernet interfaces (10Gb or
-above). Even when lower speed links are used, such as 1Gb Ethernet, a
-high MTU reduces overhead, and a consistent MTU reduces fragmentation.
-Special care must be taken with MTU when tunneling traffic with GRE or
-VXLAN, since both of those technologies require extra bytes for the tunneling headers.
-
-Typically a modern Ethernet switch that supports “Jumbo” frames
-supports an MTU of at least 9000 bytes, plus 4 for the VLAN
-identifier. Some switches support higher MTU, but it depends on make and model.
-
-NOTE: The MTU used on the VMs, plus any overhead for tunneling in GRE
-or VXLAN mode, must not exceed the MTU set on the physical interface
-or bond. If the Tenant tunneling network interface is set for an MTU
-of 9000, then the MTU on the VM cannot exceed 9000 in VLAN mode, or
-8950 in GRE or VXLAN mode, in order to make room for up to 50 bytes of
-overhead. For more information about setting the physical MTU, refer
-to the <<configuring_jumbo_frames>> section.
-
-In order to use jumbo frames on VMs, a setting must be edited or
-created in two places on each OpenStack Networking controller and on
-each compute host. The changes to the MTU settings are persistent
-because Puppet does not manage the MTU settings in {ro} 7. The VIF
-attached to each VM must have an MTU that is 50 bytes lower to
-accommodate VXLAN or GRE overhead.
-
-In _/etc/nova/nova.conf_, edit or create this line:
+To configure the default tenant MTU settings to use jumbo frames (larger
+than 1500 bytes), you can specify the parameter
+_NeutronTenantMtu_ in an environment file. This will set the default MTU
+ for tenant networks created by Neutron. If you are using any kind of
+tunneling (VXLAN or GRE), then this value should be 50 bytes less than the
+physical MTU set on the network switches.
 
 [subs=+quotes]
 ----
- network_device_mtu = 8950
+parameter_defaults:
+  NeutronTenantMtu: 8950
 ----
 
-In _/etc/neutron/neutron.conf_, edit or create this line:
-
-[subs=+quotes]
-----
- network_device_mtu = 8950
-----
-
-NOTE:  When the MTU is modified in Nova and Neutron, the services must be
-restarted for the settings to take effect. The settings only apply to VMs
-started after the services have been restarted.
-
-Furthermore, the MTU on the VM image should be set to the same value, which
-can be done manually with the following command:
-
-[subs=+quotes]
-----
- # *ifconfig <interface> mtu 8950 up*
-----
-
-To enforce that each VM is set to use jumbo frames each time it
-boots, the _dhcp-option-force_ option must be set for the
-_neutron-dhcp-agent_. Change the DHCP options in the file
-_/etc/neutron/dnsmasq-neutron.conf_ on all controllers:
-
-[subs=+quotes]
-----
- dhcp-option-force=26,8950
-----
-
-After making this change, restart the _neutron-dhcp-agent_ process on all
-controllers.
+NOTE: This parameter is deprecated. Future versions of OpenStack Networking
+will automatically determine this value. Additional parameters will be made
+available for fine-tuning tenant MTU settings.
 
 ==== Configuring Provider Networks
-Provider networks are networks that are attached directly to compute hosts,
-but traffic is not routed through the Neutron controller. Instead, provider
-networks are a way to attach a VM directly to a flat or VLAN network that is
-a part of the datacenter network. This is often how external access is
-provided, rather than using floating IPs on a Neutron controller. Provider
-networks and Neutron tenant networks can both be used simultaneously.
+Provider networks are networks that are created by the Operator rather than
+by tenants. This is often used as a way to attach a VM directly to an
+existing flat or VLAN network that is a part of the datacenter network.
+This is often how external access is provided, rather than using floating
+IPs on a Neutron controller. Provider networks and Neutron tenant networks
+can both be used simultaneously by a VM.
 
 Provider networks can only be configured by an administrator, but they appear
-as normal Neutron networks to the client. This allows them to be selected by a
-tenant when launching a VM.
+as normal Neutron networks to the client if they are marked as shared. This
+allows them to be selected by a tenant when launching a VM.
 
-Provider networks do not require the use of the L3 Agent, because the traffic is
+Provider networks generally do not require the use of the L3 Agent, because the traffic is
 not routed through the Neutron controller. Generally Neutron will provide DHCP
 services on provider networks. Ordinarily, metadata services are provided by a
 redirect on the L3 Agent, but another mechanism is provided below for metadata
@@ -226,6 +187,14 @@ _ovs_neutron_plugin.ini_ file on the controllers and compute hosts:
  network_vlan_ranges = physnet-trunk
 ----
 
+This is done automatically by Director based on the mappings provided on the
+deployment command-line. The default mapping is datacentre:br-ex. This results
+in the "br-ex" bridge being referred to as the physical network "datacentre"
+when creating networks. The above mapping would result in the bridge "br-trunk"
+being referred to as the physical network "physnet-trunk". Multiple bridge
+mappings may be separated by commas in the configuration file and in the
+deployment command line.
+
 ===== Configuring the Metadata Service For Provider Networks
 
 The normal mechanism of providing metadata services via a redirect on the L3 Agent is not compatible with provider networks. Instead, configure the file _/etc/neutron/dhcp_agent.ini_ as follows:
@@ -237,11 +206,28 @@ The normal mechanism of providing metadata services via a redirect on the L3 Age
  enable_metadata_network = True
 ----
 
-NOTE: Utilizing this configuration will supersede the L3-provided metadata services for networks that do not use provider networks, but this method should also be compatible with those networks.
+NOTE: Utilizing this configuration will supersede the L3-provided metadata
+services for networks that do not use provider networks, but this method
+should also be compatible with those networks.
+
+This setting can be added to the network environment like this:
+
+[subs=+quotes]
+----
+parameter_defaults:
+  NeutronEnableIsolatedMetadata: true
+----
+
 
 ===== Creating Provider Network Bridge With OSP-Director
 
-In order to use provider networks, the interface to the network will have to be placed on a bridge. By default, a br-ex bridge will be created, but provider networks can also be assigned to interfaces which are not part of br-ex by creating another bridge. The bridge should match on both the controller and compute nodes. For example, if bond2 (with nic5 and nic6) will be attached to provider networks, then adding this to both the controller and compute NIC configuration will allow provider networks to be created on this bond:
+In order to use provider networks, the interface to the network will have to be
+placed on a bridge. By default, a br-ex bridge will be created, but provider
+networks can also be assigned to interfaces which are not part of br-ex by
+creating another bridge. The bridge should match on both the controller and
+compute nodes. For example, if bond2 (with nic5 and nic6) will be attached
+to provider networks, then adding this to both the controller and compute
+NIC configuration will allow provider networks to be created on this bond:
 
 [subs=+quotes]
 ----
@@ -250,9 +236,9 @@ In order to use provider networks, the interface to the network will have to be 
               name: br-trunk
               members:
                 -
-                  type: ovs_bond
+                  type: linux_bond
                   name: bond2
-                  ovs_options: {get_param: BondInterfaceOvsOptions}
+                  bonding_options: {get_param: BondInterfaceOvsOptions}
                   members:
                     -
                       type: interface

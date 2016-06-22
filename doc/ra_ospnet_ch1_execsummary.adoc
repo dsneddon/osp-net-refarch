@@ -1,7 +1,7 @@
 [abstract]
 == Executive Summary
-{ospver} ({ro} 7) is a reliable infrastructure platform based on
-OpenStack. {ro} 7 has a modular service-based architecture designed
+{ospver} ({ro}) is a reliable infrastructure platform based on
+OpenStack. {ro} has a modular service-based architecture designed
 for massive scalability. This document describes Red Hat’s approach to
 scaling OpenStack with a scalable and resilient network infrastructure.
 
@@ -15,9 +15,9 @@ Benefits of this approach include:
 * Highly available network controllers and network hardware improve
   fault tolerance and resiliency
 
-The first section of this document describes the {ro} 7 architecture
+The first section of this document describes the {ro} architecture
 and the highly available network architectures which are recommended
-for use with {ro} 7. The second section describes approaches to
+for use with {ro}. The second section describes approaches to
 networking high availability. The third section describes the lab
 environment, hardware, and software versions used to test the
 reference architecture. The fourth section describes setting up the
@@ -25,5 +25,3 @@ network and deploying OpenStack. The fifth section describes the
 OpenStack Neutron configuration of tenant network segregation,
 including overlay networks. The sixth section includes some common
 troubleshooting techniques for Neutron networks.
-
-This document has been updated for {ro} 7.0.1 and {ro} director 7.1.
